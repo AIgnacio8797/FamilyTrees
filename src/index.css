@@ -64,6 +64,30 @@ body {
   box-shadow: 0 0 0 2px rgb(58 125 107 / 18%), 0 5px 16px rgb(34 36 38 / 10%);
 }
 
+.relationship-node {
+  min-width: 72px;
+  padding: 7px 12px;
+  border: 1px solid #c9c7be;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #20231f;
+  box-shadow: 0 5px 16px rgb(34 36 38 / 10%);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
+.relationship-node.attachable {
+  border-color: #3a7d6b;
+  box-shadow: 0 0 0 2px rgb(58 125 107 / 14%), 0 5px 16px rgb(34 36 38 / 10%);
+}
+
+.react-flow__node-relationship.locked-relationship-node .react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .react-flow__handle {
   width: 10px;
   height: 10px;
@@ -79,6 +103,11 @@ body {
 .selected-relationship-edge .react-flow__edge-text {
   fill: #20231f;
   font-weight: 700;
+}
+
+.relationship-connector-edge .react-flow__edge-path {
+  stroke: #9da19a;
+  stroke-dasharray: none;
 }
 
 .relative-panel {

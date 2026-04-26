@@ -3,6 +3,7 @@ import { relationships } from '../constants/familyTree';
 export function RelationshipPanel({
   selectedNode,
   selectedEdge,
+  relationshipOptions = relationships,
   onAddRelative,
   onUpdateEdgeRelationship,
 }) {
@@ -34,7 +35,7 @@ export function RelationshipPanel({
         </div>
 
         <div className="relative-actions">
-          {relationships.map((relationship) => (
+          {relationshipOptions.map((relationship) => (
             <button
               key={relationship}
               type="button"
