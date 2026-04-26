@@ -15,6 +15,72 @@ body {
   background: #f7f7f3;
 }
 
+.person-node {
+  min-width: 120px;
+  max-width: 220px;
+  border: 1px solid #c9c7be;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 5px 16px rgb(34 36 38 / 10%);
+}
+
+.person-node-label {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: #20231f;
+  cursor: grab;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.person-node-label:active {
+  cursor: grabbing;
+}
+
+.person-node-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  outline: 2px solid #3a7d6b;
+  outline-offset: 0;
+  color: #20231f;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.react-flow__node-person.selected .person-node {
+  border-color: #3a7d6b;
+  box-shadow: 0 0 0 2px rgb(58 125 107 / 18%), 0 5px 16px rgb(34 36 38 / 10%);
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #ffffff;
+  background: #3a7d6b;
+}
+
+.selected-relationship-edge .react-flow__edge-path {
+  stroke: #3a7d6b;
+  stroke-width: 3;
+}
+
+.selected-relationship-edge .react-flow__edge-text {
+  fill: #20231f;
+  font-weight: 700;
+}
+
 .relative-panel {
   position: absolute;
   top: 16px;
@@ -63,4 +129,10 @@ body {
 
 .relative-actions button:hover {
   background: #eceadf;
+}
+
+.relative-actions button.active-action {
+  border-color: #3a7d6b;
+  background: #dcebe6;
+  color: #173d33;
 }

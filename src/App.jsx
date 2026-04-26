@@ -1,25 +1,29 @@
-import { useState, useCallback } from 'react';
-import { ReactFlow, applyNodeChanges, applyEdgeChanges, addEdge, Background, Controls } from '@xyflow/react';
+import { useCallback, useState } from 'react';
+import {
+  ReactFlow,
+  applyNodeChanges,
+  applyEdgeChanges,
+  addEdge,
+  Background,
+  ConnectionMode,
+  Controls,
+} from '@xyflow/react';
+import { PersonNode } from './components/PersonNode';
+import { RelationshipPanel } from './components/RelationshipPanel';
+import { initialEdges, initialNodes, relativePositions } from './constants/familyTree';
 import './index.css';
 import '@xyflow/react/dist/style.css';
- 
-const initialNodes = [
-  { id: 'person-1', position: { x: 0, y: 0 }, data: { label: 'Person 1' } },
-  { id: 'person-2', position: { x: 0, y: 120 }, data: { label: 'Person 2' } },
-];
-const initialEdges = [{ id: 'person-1-person-2', source: 'person-1', target: 'person-2' }];
 
-const relativePositions = {
-  parent: { x: 0, y: -140 },
-  child: { x: 0, y: 140 },
-  partner: { x: 220, y: 0 },
-  sibling: { x: 220, y: 100 },
+const nodeTypes = {
+  person: PersonNode,
 };
  
 export default function App() {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState(null);
+  const [editingNodeId, setEditingNodeId] = useState(null);
  
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
@@ -30,11 +34,16 @@ export default function App() {
     [],
   );
   const onConnect = useCallback(
-    (params) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
+    (params) => setEdges((edgesSnapshot) => addEdge({
+      ...params,
+      id: `${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}-${Date.now()}`,
+      label: 'relationship',
+    }, edgesSnapshot)),
     [],
   );
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId);
 
   const addRelative = useCallback((relationship) => {
     if (!selectedNode) return;
@@ -43,6 +52,7 @@ export default function App() {
     const newNodeId = `person-${Date.now()}`;
     const newNode = {
       id: newNodeId,
+      type: 'person',
       position: {
         x: selectedNode.position.x + offset.x,
         y: selectedNode.position.y + offset.y,
@@ -56,30 +66,97 @@ export default function App() {
     setEdges((edgesSnapshot) => {
       const source = relationship === 'parent' ? newNodeId : selectedNode.id;
       const target = relationship === 'parent' ? selectedNode.id : newNodeId;
+      const sourceHandle = 'bottom';
+      const targetHandle = 'top';
 
       return [
         ...edgesSnapshot,
         {
           id: `${source}-${target}`,
           source,
+          sourceHandle,
           target,
+          targetHandle,
           label: relationship,
         },
       ];
     });
     setSelectedNodeId(newNodeId);
   }, [selectedNode]);
+
+  const startEditingNode = useCallback((nodeId) => {
+    setSelectedNodeId(nodeId);
+    setEditingNodeId(nodeId);
+  }, []);
+
+  const updateNodeLabel = useCallback((nodeId, label) => {
+    const nextLabel = label.trim() || 'Unnamed person';
+
+    setNodes((nodesSnapshot) => nodesSnapshot.map((node) => {
+      if (node.id !== nodeId) return node;
+
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          label: nextLabel,
+        },
+      };
+    }));
+    setEditingNodeId(null);
+  }, []);
+
+  const cancelEditingNode = useCallback(() => {
+    setEditingNodeId(null);
+  }, []);
+
+  const updateEdgeRelationship = useCallback((edgeId, relationship) => {
+    setEdges((edgesSnapshot) => edgesSnapshot.map((edge) => {
+      if (edge.id !== edgeId) return edge;
+
+      return {
+        ...edge,
+        label: relationship,
+      };
+    }));
+  }, []);
+
+  const flowNodes = nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      isEditing: node.id === editingNodeId,
+      onStartEditing: startEditingNode,
+      onLabelChange: updateNodeLabel,
+      onCancelEditing: cancelEditingNode,
+    },
+  }));
  
   return (
     <div className="app-shell">
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={flowNodes}
+        edges={edges.map((edge) => ({
+          ...edge,
+          className: edge.id === selectedEdgeId ? 'selected-relationship-edge' : edge.className,
+        }))}
+        nodeTypes={nodeTypes}
+        connectionMode={ConnectionMode.Loose}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-        onPaneClick={() => setSelectedNodeId(null)}
+        onNodeClick={(_, node) => {
+          setSelectedNodeId(node.id);
+          setSelectedEdgeId(null);
+        }}
+        onEdgeClick={(_, edge) => {
+          setSelectedEdgeId(edge.id);
+          setSelectedNodeId(null);
+        }}
+        onPaneClick={() => {
+          setSelectedNodeId(null);
+          setSelectedEdgeId(null);
+        }}
         fitView
       >
         <Background
@@ -92,21 +169,12 @@ export default function App() {
         
       </ReactFlow>
 
-      {selectedNode && (
-        <aside className="relative-panel">
-          <div>
-            <p className="panel-label">Selected person</p>
-            <h2>{selectedNode.data.label}</h2>
-          </div>
-
-          <div className="relative-actions">
-            <button type="button" onClick={() => addRelative('parent')}>Add Parent</button>
-            <button type="button" onClick={() => addRelative('child')}>Add Child</button>
-            <button type="button" onClick={() => addRelative('partner')}>Add Partner</button>
-            <button type="button" onClick={() => addRelative('sibling')}>Add Sibling</button>
-          </div>
-        </aside>
-      )}
+      <RelationshipPanel
+        selectedNode={selectedEdge ? null : selectedNode}
+        selectedEdge={selectedEdge}
+        onAddRelative={addRelative}
+        onUpdateEdgeRelationship={updateEdgeRelationship}
+      />
       
     </div>
   );
