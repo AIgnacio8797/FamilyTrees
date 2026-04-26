@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Signika+Negative:wght@300..700&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Noto Sans', system-ui, sans-serif;
+}
+
+.app-shell {
+  position: absolute;
+  inset: 0;
+  background: #f7f7f3;
+}
+
+.relative-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  width: 220px;
+  padding: 14px;
+  border: 1px solid #d8d7cf;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgb(34 36 38 / 12%);
+}
+
+.panel-label {
+  margin: 0 0 4px;
+  color: #6d7067;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.relative-panel h2 {
+  margin: 0 0 14px;
+  color: #20231f;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.relative-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.relative-actions button {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cac8bf;
+  border-radius: 6px;
+  background: #f6f5ef;
+  color: #20231f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.relative-actions button:hover {
+  background: #eceadf;
+}
