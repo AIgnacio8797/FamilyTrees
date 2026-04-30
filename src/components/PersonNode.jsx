@@ -28,8 +28,9 @@ export const PersonNode = memo(function PersonNode({ id, data }) {
   }, [data, saveLabel]);
 
   return (
-    <div className="person-node">
+    <div className="person-node" style={{ '--person-node-color': data.color || '#ffffff' }}>
       <Handle id="top" type="source" position={Position.Top} />
+      <Handle id="left" type="source" position={Position.Left} />
 
       {data.isEditing ? (
         <input
@@ -50,6 +51,7 @@ export const PersonNode = memo(function PersonNode({ id, data }) {
         </button>
       )}
 
+      <Handle id="right" type="source" position={Position.Right} />
       <Handle id="bottom" type="source" position={Position.Bottom} />
     </div>
   );

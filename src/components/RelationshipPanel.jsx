@@ -27,11 +27,13 @@ export function RelationshipPanel({
   }
 
   if (selectedEdge) {
+    const relationship = selectedEdge.data?.relationship || 'relationship';
+
     return (
       <aside className="relative-panel">
         <div>
           <p className="panel-label">Selected wire</p>
-          <h2>{selectedEdge.label || 'relationship'}</h2>
+          <h2>{relationship}</h2>
         </div>
 
         <div className="relative-actions">
@@ -39,7 +41,7 @@ export function RelationshipPanel({
             <button
               key={relationship}
               type="button"
-              className={selectedEdge.label === relationship ? 'active-action' : ''}
+              className={selectedEdge.data?.relationship === relationship ? 'active-action' : ''}
               onClick={() => onUpdateEdgeRelationship(selectedEdge.id, relationship)}
             >
               {relationship}

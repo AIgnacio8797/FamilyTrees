@@ -4,15 +4,163 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: 'Noto Sans', system-ui, sans-serif;
 }
 
 .app-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #f7f7f3;
+}
+
+.tree-controller {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  z-index: 10;
+  width: 250px;
+  min-height: 308px;
+  max-height: calc(100vh - 48px);
+  padding: 14px 10px 16px;
+  border-radius: 28px;
+  background: #8f908d;
+  box-shadow: 0 14px 30px rgb(34 36 38 / 16%);
+  transform: translateY(-50%);
+  overflow: hidden;
+  transition: min-height 180ms ease, width 180ms ease;
+}
+
+.tree-controller.expanded-node-editor {
+  min-height: 374px;
+}
+
+.controller-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.controller-tabs button,
+.controller-action,
+.controller-history-actions button {
+  border: 0;
+  background: #ffe89b;
+  color: #20231f;
+  cursor: pointer;
+  font: inherit;
+  box-shadow: none;
+}
+
+.controller-tabs button {
+  min-width: 0;
+  height: 38px;
+  border-radius: 999px;
+  font-size: 17px;
+}
+
+.controller-tabs button:hover:not(:disabled),
+.controller-action:hover:not(:disabled),
+.controller-history-actions button:hover:not(:disabled) {
+  background: #fff0b8;
+}
+
+.controller-tabs button.muted-controller-tab {
+  opacity: 0.44;
+}
+
+.controller-tabs button.active-controller-tab {
+  opacity: 1;
+}
+
+.controller-panel {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.expanded-node-editor .controller-panel {
+  min-height: 286px;
+}
+
+.controller-action {
+  width: calc(100% - 28px);
+  min-height: 40px;
+  margin-inline: auto;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.color-picker-action {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.color-picker-action input {
   position: absolute;
   inset: 0;
-  background: #f7f7f3;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.controller-action:disabled {
+  background: #e4d399;
+  color: #5b5b56;
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.controller-history-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: auto;
+  padding-inline: 18px;
+}
+
+.controller-history-actions button {
+  min-height: 36px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.controller-history-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.muted-controller-panel {
+  align-items: center;
+  justify-content: center;
+  color: rgb(255 255 255 / 68%);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.node-editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 18px;
 }
 
 .person-node {
@@ -20,7 +168,7 @@ body {
   max-width: 220px;
   border: 1px solid #c9c7be;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--person-node-color, #ffffff);
   box-shadow: 0 5px 16px rgb(34 36 38 / 10%);
 }
 
@@ -105,9 +253,30 @@ body {
   font-weight: 700;
 }
 
-.relationship-connector-edge .react-flow__edge-path {
+.relationship-edge .react-flow__edge-path {
   stroke: #9da19a;
   stroke-dasharray: none;
+}
+
+.partner-edge .react-flow__edge-path {
+  stroke: #73786e;
+  stroke-width: 2;
+}
+
+.child-edge .react-flow__edge-path,
+.parent-edge .react-flow__edge-path {
+  stroke: #9da19a;
+  stroke-width: 2;
+}
+
+.sibling-edge .react-flow__edge-path {
+  stroke: #a8aca4;
+  stroke-width: 2;
+}
+
+.selected-relationship-edge .react-flow__edge-path {
+  stroke: #3a7d6b;
+  stroke-width: 3;
 }
 
 .relative-panel {
