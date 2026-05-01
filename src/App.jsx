@@ -19,7 +19,9 @@ import {
   exportTreeToFile,
   getEdgeClassName,
   getRelationshipFromHandles,
+  loadTreeFromLocalDraft,
   parseImportedTree,
+  saveTreeToLocalDraft,
 } from './utils/treeData';
 import './index.css';
 import '@xyflow/react/dist/style.css';
@@ -33,7 +35,10 @@ const edgeTypes = {
 };
 
 export default function App() {
-  const [tree, setTree] = useState({ nodes: initialNodes, edges: initialEdges });
+  const [initialLocalDraft] = useState(() => loadTreeFromLocalDraft());
+  const [tree, setTree] = useState(() => (
+    initialLocalDraft?.tree || { nodes: initialNodes, edges: initialEdges }
+  ));
   const [history, setHistory] = useState({ past: [], future: [] });
   const [controllerMode, setControllerMode] = useState('edit');
   const [editTarget, setEditTarget] = useState('people');
@@ -50,6 +55,9 @@ export default function App() {
   const treeRef = useRef(tree);
   const historyRef = useRef(history);
   const controllerRef = useRef(null);
+  const autosaveTimeoutRef = useRef(null);
+  const viewportRef = useRef(initialLocalDraft?.viewport || null);
+  const hasAppliedInitialViewportRef = useRef(false);
   const { nodes, edges } = tree;
 
   useEffect(() => {
@@ -59,6 +67,26 @@ export default function App() {
   useEffect(() => {
     historyRef.current = history;
   }, [history]);
+
+  const flushAutosave = useCallback(() => {
+    const viewport = reactFlowInstance?.getViewport() || viewportRef.current || null;
+    const savedDraft = saveTreeToLocalDraft(treeRef.current, viewport);
+
+    if (savedDraft?.viewport) {
+      viewportRef.current = savedDraft.viewport;
+    }
+  }, [reactFlowInstance]);
+
+  const scheduleAutosave = useCallback(() => {
+    if (autosaveTimeoutRef.current) {
+      window.clearTimeout(autosaveTimeoutRef.current);
+    }
+
+    autosaveTimeoutRef.current = window.setTimeout(() => {
+      flushAutosave();
+      autosaveTimeoutRef.current = null;
+    }, 450);
+  }, [flushAutosave]);
 
   const clearInteractionState = useCallback(() => {
     setSelectedNodeIds([]);
@@ -174,6 +202,45 @@ export default function App() {
   const openImportPicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
+
+  useEffect(() => {
+    scheduleAutosave();
+  }, [scheduleAutosave, tree]);
+
+  useEffect(() => () => {
+    if (autosaveTimeoutRef.current) {
+      window.clearTimeout(autosaveTimeoutRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (autosaveTimeoutRef.current) {
+        window.clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = null;
+      }
+
+      flushAutosave();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [flushAutosave]);
+
+  useEffect(() => {
+    if (!reactFlowInstance || hasAppliedInitialViewportRef.current) return;
+
+    const initialViewport = initialLocalDraft?.viewport;
+
+    if (initialViewport) {
+      requestAnimationFrame(() => {
+        reactFlowInstance.setViewport(initialViewport, { duration: 0 });
+      });
+    }
+
+    hasAppliedInitialViewportRef.current = true;
+  }, [initialLocalDraft, reactFlowInstance]);
  
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -532,6 +599,10 @@ export default function App() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onInit={setReactFlowInstance}
+        onMoveEnd={(event, viewport) => {
+          viewportRef.current = viewport;
+          scheduleAutosave();
+        }}
         onSelectionChange={({ nodes: selectedNodes, edges: selectedEdgesFromLasso = [] }) => {
           if (!isLassoMode) return;
 
@@ -601,7 +672,7 @@ export default function App() {
         selectionOnDrag={isLassoMode}
         panOnDrag={!isLassoMode}
         proOptions={{ hideAttribution: true }}
-        fitView
+        fitView={!initialLocalDraft?.viewport}
       >
         <Background
           variant="dots"

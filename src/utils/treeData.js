@@ -1,4 +1,5 @@
 const TREE_FILE_VERSION = 1;
+const LOCAL_AUTOSAVE_STORAGE_KEY = 'familytrees.localDraft.v1';
 const sideHandles = ['left', 'right'];
 
 export const getRelationshipFromHandles = (sourceHandle, targetHandle) => {
@@ -105,4 +106,33 @@ export const exportTreeToFile = (tree, viewport) => {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+};
+
+export const saveTreeToLocalDraft = (tree, viewport) => {
+  if (typeof window === 'undefined') return null;
+
+  const payload = {
+    version: TREE_FILE_VERSION,
+    savedAt: new Date().toISOString(),
+    tree,
+    viewport: viewport || null,
+  };
+
+  window.localStorage.setItem(LOCAL_AUTOSAVE_STORAGE_KEY, JSON.stringify(payload));
+  return payload;
+};
+
+export const loadTreeFromLocalDraft = () => {
+  if (typeof window === 'undefined') return null;
+
+  const rawDraft = window.localStorage.getItem(LOCAL_AUTOSAVE_STORAGE_KEY);
+
+  if (!rawDraft) return null;
+
+  try {
+    return parseImportedTree(rawDraft);
+  } catch {
+    window.localStorage.removeItem(LOCAL_AUTOSAVE_STORAGE_KEY);
+    return null;
+  }
 };
