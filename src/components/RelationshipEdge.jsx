@@ -23,16 +23,31 @@ export function RelationshipEdge({
       targetY,
       targetPosition,
     });
+  const strokeDasharray = getLineDasharray(data?.lineStyle);
+  const strokeColor = data?.color || '#9da19a';
 
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      style={{
-        stroke: selected ? '#3a7d6b' : data?.color,
-        strokeWidth: selected ? 3 : 2,
-        strokeDasharray: getLineDasharray(data?.lineStyle),
-      }}
-    />
+    <>
+      {selected && (
+        <BaseEdge
+          id={`${id}-selection`}
+          path={edgePath}
+          style={{
+            stroke: '#3a7d6b',
+            strokeWidth: 6,
+            strokeOpacity: 0.45,
+          }}
+        />
+      )}
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: strokeColor,
+          strokeWidth: 2,
+          strokeDasharray,
+        }}
+      />
+    </>
   );
 }

@@ -265,7 +265,12 @@ export default function App() {
   const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : null;
   const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : null;
   const hasSelectedNodes = selectedNodeIds.length > 0;
-  const hasSelectedEdges = selectedEdgeIds.length > 0;
+  const activeEdgeIds = selectedEdgeIds.length > 0
+    ? selectedEdgeIds
+    : (selectedEdgeId ? [selectedEdgeId] : []);
+  const activeLineStyle = activeEdgeIds.length > 0
+    ? edges.find((edge) => edge.id === activeEdgeIds[0])?.data?.lineStyle || 'solid'
+    : 'solid';
 
   const addRelative = useCallback((relationship) => {
     if (!selectedNode) return;
@@ -382,12 +387,16 @@ export default function App() {
   }, [selectedNodeId, updateTree]);
 
   const updateSelectedEdgeColor = useCallback((color) => {
-    if (!selectedEdgeId) return;
+    const targetEdgeIds = selectedEdgeIds.length > 0
+      ? selectedEdgeIds
+      : (selectedEdgeId ? [selectedEdgeId] : []);
+
+    if (targetEdgeIds.length === 0) return;
 
     updateTree((treeSnapshot) => ({
       ...treeSnapshot,
       edges: treeSnapshot.edges.map((edge) => {
-        if (edge.id !== selectedEdgeId) return edge;
+        if (!targetEdgeIds.includes(edge.id)) return edge;
 
         return {
           ...edge,
@@ -402,29 +411,35 @@ export default function App() {
         };
       }),
     }));
-  }, [selectedEdgeId, updateTree]);
+  }, [selectedEdgeId, selectedEdgeIds, updateTree]);
 
   const deleteSelectedEdge = useCallback(() => {
-    if (!selectedEdgeId && !hasSelectedEdges) return;
+    const targetEdgeIds = selectedEdgeIds.length > 0
+      ? selectedEdgeIds
+      : (selectedEdgeId ? [selectedEdgeId] : []);
+
+    if (targetEdgeIds.length === 0) return;
 
     updateTree((treeSnapshot) => ({
       ...treeSnapshot,
-      edges: treeSnapshot.edges.filter((edge) => (
-        selectedEdgeId ? edge.id !== selectedEdgeId : !selectedEdgeIds.includes(edge.id)
-      )),
+      edges: treeSnapshot.edges.filter((edge) => !targetEdgeIds.includes(edge.id)),
     }));
     setSelectedEdgeIds([]);
     setSelectedEdgeId(null);
     setIsLineStyleMenuOpen(false);
-  }, [hasSelectedEdges, selectedEdgeId, selectedEdgeIds, updateTree]);
+  }, [selectedEdgeId, selectedEdgeIds, updateTree]);
 
   const updateSelectedEdgeLineStyle = useCallback((lineStyle) => {
-    if (!selectedEdgeId) return;
+    const targetEdgeIds = selectedEdgeIds.length > 0
+      ? selectedEdgeIds
+      : (selectedEdgeId ? [selectedEdgeId] : []);
+
+    if (targetEdgeIds.length === 0) return;
 
     updateTree((treeSnapshot) => ({
       ...treeSnapshot,
       edges: treeSnapshot.edges.map((edge) => {
-        if (edge.id !== selectedEdgeId) return edge;
+        if (!targetEdgeIds.includes(edge.id)) return edge;
 
         return {
           ...edge,
@@ -435,7 +450,7 @@ export default function App() {
         };
       }),
     }));
-  }, [selectedEdgeId, updateTree]);
+  }, [selectedEdgeId, selectedEdgeIds, updateTree]);
 
   const showPeopleTools = controllerMode === 'edit' && editTarget === 'people';
   const showLineTools = controllerMode === 'edit' && editTarget === 'line';
@@ -506,19 +521,23 @@ export default function App() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onInit={setReactFlowInstance}
-        onSelectionChange={({ nodes: selectedNodes }) => {
+        onSelectionChange={({ nodes: selectedNodes, edges: selectedEdgesFromLasso = [] }) => {
           if (!isLassoMode) return;
 
           const nextSelectedNodeIds = selectedNodes.map((node) => node.id);
-          const nextSelectedEdgeIds = edges
+          const connectedEdgeIds = edges
             .filter((edge) => (
               nextSelectedNodeIds.includes(edge.source) && nextSelectedNodeIds.includes(edge.target)
             ))
             .map((edge) => edge.id);
+          const nextSelectedEdgeIds = [...new Set([
+            ...connectedEdgeIds,
+            ...selectedEdgesFromLasso.map((edge) => edge.id),
+          ])];
 
           setSelectedNodeIds(nextSelectedNodeIds);
           setSelectedEdgeIds(nextSelectedEdgeIds);
-          setSelectedEdgeId(null);
+          setSelectedEdgeId(nextSelectedEdgeIds[0] || null);
           setIsNodeEditorOpen(false);
         }}
         onNodeClick={(event, node) => {
@@ -539,11 +558,22 @@ export default function App() {
           setEditTarget('people');
           setIsLineStyleMenuOpen(false);
         }}
-        onEdgeClick={(_, edge) => {
+        onEdgeClick={(event, edge) => {
           setIsLassoMode(false);
-          setSelectedEdgeIds([]);
-          setSelectedEdgeId(edge.id);
           setSelectedNodeIds([]);
+          if (event.shiftKey) {
+            setSelectedEdgeIds((currentIds) => {
+              const nextIds = currentIds.includes(edge.id)
+                ? currentIds.filter((edgeId) => edgeId !== edge.id)
+                : [...currentIds, edge.id];
+
+              setSelectedEdgeId(nextIds[0] || null);
+              return nextIds;
+            });
+          } else {
+            setSelectedEdgeIds([edge.id]);
+            setSelectedEdgeId(edge.id);
+          }
           setIsNodeEditorOpen(false);
           setIsLineStyleMenuOpen(false);
           setControllerMode('edit');
@@ -644,12 +674,12 @@ export default function App() {
             <div className="controller-panel">
             {showLineTools && (
                 <div className="controller-tool-stack relationship-editor-panel">
-                  <label className={`controller-action color-picker-action ${!selectedEdge ? 'disabled-controller-action' : ''}`}>
+                  <label className={`controller-action color-picker-action ${activeEdgeIds.length === 0 ? 'disabled-controller-action' : ''}`}>
                   Edit line color
                   <input
                     type="color"
                     value={selectedEdge?.data?.color || '#9da19a'}
-                    disabled={!selectedEdge}
+                    disabled={activeEdgeIds.length === 0}
                     onChange={(event) => updateSelectedEdgeColor(event.target.value)}
                   />
                 </label>
@@ -657,7 +687,7 @@ export default function App() {
                   <button
                     type="button"
                     className="controller-action"
-                    disabled={!selectedEdge}
+                    disabled={activeEdgeIds.length === 0}
                     onClick={() => setIsLineStyleMenuOpen((isOpen) => !isOpen)}
                   >
                     Line style
@@ -667,7 +697,7 @@ export default function App() {
                   type="button"
                   className="controller-action"
                   onClick={deleteSelectedEdge}
-                  disabled={!selectedEdge && !hasSelectedEdges}
+                  disabled={activeEdgeIds.length === 0}
                 >
                   Delete line
                 </button>
@@ -746,13 +776,13 @@ export default function App() {
           </>
         )}
 
-        {showLineTools && selectedEdge && isLineStyleMenuOpen && (
+        {showLineTools && activeEdgeIds.length > 0 && isLineStyleMenuOpen && (
           <div className="line-style-menu" aria-label="Line style options">
             {lineStyleOptions.map((option) => (
               <button
                 key={option.id}
                 type="button"
-                className={(selectedEdge.data?.lineStyle || 'solid') === option.id ? 'active-line-style' : ''}
+                className={activeLineStyle === option.id ? 'active-line-style' : ''}
                 aria-label={option.label}
                 title={option.label}
                 onClick={() => updateSelectedEdgeLineStyle(option.id)}
