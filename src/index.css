@@ -40,6 +40,10 @@ body {
   overflow: visible;
 }
 
+.hidden-file-input {
+  display: none;
+}
+
 .tree-controller.expanded-node-editor {
   height: 404px;
 }
@@ -211,6 +215,22 @@ body {
   font-size: 15px;
   font-weight: 700;
 }
+
+.import-export-panel {
+  grid-template-rows: 40px 40px auto;
+  align-content: start;
+  padding-top: 8px;
+}
+
+.controller-panel-note {
+  width: calc(100% - 30px);
+  margin: 0 auto;
+  color: rgb(255 255 255 / 76%);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+ }
 
 .controller-tool-stack {
   display: grid;
