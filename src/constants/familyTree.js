@@ -10,7 +10,7 @@ export const initialEdges = [
     sourceHandle: 'bottom',
     target: 'person-2',
     targetHandle: 'top',
-    type: 'smoothstep',
+    type: 'relationship',
     data: { relationship: 'child' },
     className: 'relationship-edge child-edge',
   },

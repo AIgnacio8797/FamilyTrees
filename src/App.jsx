@@ -7,11 +7,14 @@ import {
   Background,
   ConnectionMode,
   Controls,
+  SelectionMode,
 } from '@xyflow/react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEye, faPenToSquare, faUpload } from '@fortawesome/free-solid-svg-icons';
+import { faEye, faPenToSquare, faUpload, faUser } from '@fortawesome/free-solid-svg-icons';
 import { PersonNode } from './components/PersonNode';
+import { RelationshipEdge } from './components/RelationshipEdge';
 import { initialEdges, initialNodes, relativePositions } from './constants/familyTree';
+import { getLineDasharray } from './constants/lineStyles';
 import './index.css';
 import '@xyflow/react/dist/style.css';
 
@@ -19,11 +22,15 @@ const nodeTypes = {
   person: PersonNode,
 };
 
+const edgeTypes = {
+  relationship: RelationshipEdge,
+};
+
 const sideHandles = ['left', 'right'];
 
 const getRelationshipFromHandles = (sourceHandle, targetHandle) => {
   if (sideHandles.includes(sourceHandle) || sideHandles.includes(targetHandle)) {
-    return 'partner';
+    return 'sibling';
   }
 
   if (sourceHandle === 'top' || targetHandle === 'bottom') {
@@ -34,6 +41,13 @@ const getRelationshipFromHandles = (sourceHandle, targetHandle) => {
 };
 
 const getEdgeClassName = (relationship) => `relationship-edge ${relationship}-edge`;
+
+const lineStyleOptions = [
+  { id: 'solid', label: 'Solid' },
+  { id: 'dashed', label: 'Dashed' },
+  { id: 'semi-dashed', label: 'Semi dashed' },
+  { id: 'dotted', label: 'Dotted' },
+];
 
 const createRelationshipEdge = ({
   source,
@@ -47,7 +61,7 @@ const createRelationshipEdge = ({
   sourceHandle,
   target,
   targetHandle,
-  type: relationship === 'partner' ? 'straight' : 'smoothstep',
+  type: 'relationship',
   data: { relationship },
   className: getEdgeClassName(relationship),
 });
@@ -56,13 +70,17 @@ export default function App() {
   const [tree, setTree] = useState({ nodes: initialNodes, edges: initialEdges });
   const [history, setHistory] = useState({ past: [], future: [] });
   const [controllerMode, setControllerMode] = useState('edit');
+  const [editTarget, setEditTarget] = useState('people');
   const [isNodeEditorOpen, setIsNodeEditorOpen] = useState(false);
-  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [editingNodeId, setEditingNodeId] = useState(null);
+  const [isLassoMode, setIsLassoMode] = useState(false);
+  const [isLineStyleMenuOpen, setIsLineStyleMenuOpen] = useState(false);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const isDraggingNodeRef = useRef(false);
   const treeRef = useRef(tree);
+  const controllerRef = useRef(null);
   const { nodes, edges } = tree;
 
   useEffect(() => {
@@ -97,10 +115,11 @@ export default function App() {
       const currentTree = treeRef.current;
 
       setTree(() => {
-        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
         setSelectedEdgeId(null);
         setEditingNodeId(null);
         setIsNodeEditorOpen(false);
+        setIsLineStyleMenuOpen(false);
         treeRef.current = previousTree;
 
         return previousTree;
@@ -121,10 +140,11 @@ export default function App() {
       const currentTree = treeRef.current;
 
       setTree(() => {
-        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
         setSelectedEdgeId(null);
         setEditingNodeId(null);
         setIsNodeEditorOpen(false);
+        setIsLineStyleMenuOpen(false);
         treeRef.current = nextTree;
 
         return nextTree;
@@ -162,6 +182,19 @@ export default function App() {
 
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [redo, undo]);
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (!isLineStyleMenuOpen) return;
+      if (controllerRef.current?.contains(event.target)) return;
+
+      setIsLineStyleMenuOpen(false);
+    };
+
+    window.addEventListener('pointerdown', onPointerDown);
+
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isLineStyleMenuOpen]);
 
   const onNodesChange = useCallback((changes) => {
     if (changes.every((change) => change.type === 'select')) return;
@@ -207,7 +240,7 @@ export default function App() {
         edges: addEdge({
           ...params,
           id: `${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}-${Date.now()}`,
-          type: relationship === 'partner' ? 'straight' : 'smoothstep',
+          type: 'relationship',
           data: { relationship },
           className: getEdgeClassName(relationship),
         }, treeSnapshot.edges),
@@ -216,7 +249,17 @@ export default function App() {
     [updateTree],
   );
 
-  const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+  const toggleLassoMode = useCallback(() => {
+    setIsLassoMode((isActive) => !isActive);
+    setSelectedEdgeId(null);
+    setIsNodeEditorOpen(false);
+    setIsLineStyleMenuOpen(false);
+  }, []);
+
+  const selectedNodeId = selectedNodeIds.length === 1 ? selectedNodeIds[0] : null;
+  const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : null;
+  const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : null;
+  const hasSelectedNodes = selectedNodeIds.length > 0;
 
   const addRelative = useCallback((relationship) => {
     if (!selectedNode) return;
@@ -263,7 +306,7 @@ export default function App() {
       nodes: [...treeSnapshot.nodes, newNode],
       edges: [...treeSnapshot.edges, edgeByRelationship[relationship]],
     }));
-    setSelectedNodeId(newNodeId);
+    setSelectedNodeIds([newNodeId]);
     setSelectedEdgeId(null);
   }, [selectedNode, updateTree]);
 
@@ -291,24 +334,24 @@ export default function App() {
       ...treeSnapshot,
       nodes: [...treeSnapshot.nodes, newNode],
     }));
-    setSelectedNodeId(newNodeId);
+    setSelectedNodeIds([newNodeId]);
     setSelectedEdgeId(null);
   }, [nodes.length, reactFlowInstance, updateTree]);
 
   const deleteSelectedNode = useCallback(() => {
-    if (!selectedNodeId) return;
+    if (!hasSelectedNodes) return;
 
     updateTree((treeSnapshot) => ({
-      nodes: treeSnapshot.nodes.filter((node) => node.id !== selectedNodeId),
+      nodes: treeSnapshot.nodes.filter((node) => !selectedNodeIds.includes(node.id)),
       edges: treeSnapshot.edges.filter((edge) => (
-        edge.source !== selectedNodeId && edge.target !== selectedNodeId
+        !selectedNodeIds.includes(edge.source) && !selectedNodeIds.includes(edge.target)
       )),
     }));
-    setSelectedNodeId(null);
+    setSelectedNodeIds([]);
     setSelectedEdgeId(null);
     setEditingNodeId(null);
     setIsNodeEditorOpen(false);
-  }, [selectedNodeId, updateTree]);
+  }, [hasSelectedNodes, selectedNodeIds, updateTree]);
 
   const updateSelectedNodeColor = useCallback((color) => {
     if (!selectedNodeId) return;
@@ -329,8 +372,64 @@ export default function App() {
     }));
   }, [selectedNodeId, updateTree]);
 
+  const updateSelectedEdgeColor = useCallback((color) => {
+    if (!selectedEdgeId) return;
+
+    updateTree((treeSnapshot) => ({
+      ...treeSnapshot,
+      edges: treeSnapshot.edges.map((edge) => {
+        if (edge.id !== selectedEdgeId) return edge;
+
+        return {
+          ...edge,
+          data: {
+            ...edge.data,
+            color,
+          },
+          style: {
+            ...edge.style,
+            stroke: color,
+          },
+        };
+      }),
+    }));
+  }, [selectedEdgeId, updateTree]);
+
+  const deleteSelectedEdge = useCallback(() => {
+    if (!selectedEdgeId) return;
+
+    updateTree((treeSnapshot) => ({
+      ...treeSnapshot,
+      edges: treeSnapshot.edges.filter((edge) => edge.id !== selectedEdgeId),
+    }));
+    setSelectedEdgeId(null);
+    setIsLineStyleMenuOpen(false);
+  }, [selectedEdgeId, updateTree]);
+
+  const updateSelectedEdgeLineStyle = useCallback((lineStyle) => {
+    if (!selectedEdgeId) return;
+
+    updateTree((treeSnapshot) => ({
+      ...treeSnapshot,
+      edges: treeSnapshot.edges.map((edge) => {
+        if (edge.id !== selectedEdgeId) return edge;
+
+        return {
+          ...edge,
+          data: {
+            ...edge.data,
+            lineStyle,
+          },
+        };
+      }),
+    }));
+  }, [selectedEdgeId, updateTree]);
+
+  const showPeopleTools = controllerMode === 'edit' && editTarget === 'people';
+  const showLineTools = controllerMode === 'edit' && editTarget === 'line';
+
   const startEditingNode = useCallback((nodeId) => {
-    setSelectedNodeId(nodeId);
+    setSelectedNodeIds([nodeId]);
     setEditingNodeId(nodeId);
   }, []);
 
@@ -360,7 +459,7 @@ export default function App() {
 
   const flowNodes = nodes.map((node) => ({
     ...node,
-    selected: node.id === selectedNodeId,
+    selected: selectedNodeIds.includes(node.id),
     data: {
       ...node.data,
       isEditing: node.id === editingNodeId,
@@ -376,31 +475,65 @@ export default function App() {
         nodes={flowNodes}
         edges={edges.map((edge) => ({
           ...edge,
+          type: 'relationship',
           selected: edge.id === selectedEdgeId,
+          style: {
+            ...edge.style,
+            stroke: edge.data?.color || edge.style?.stroke,
+            strokeDasharray: getLineDasharray(edge.data?.lineStyle)
+              || edge.style?.strokeDasharray,
+          },
           className: edge.id === selectedEdgeId
             ? `${edge.className || 'relationship-edge'} selected-relationship-edge`
             : edge.className,
         }))}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Loose}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onInit={setReactFlowInstance}
-        onNodeClick={(_, node) => {
-          setSelectedNodeId(node.id);
+        onSelectionChange={({ nodes: selectedNodes }) => {
+          if (!isLassoMode) return;
+
+          setSelectedNodeIds(selectedNodes.map((node) => node.id));
           setSelectedEdgeId(null);
+          setIsNodeEditorOpen(false);
+        }}
+        onNodeClick={(event, node) => {
+          if (event.shiftKey) {
+            setSelectedNodeIds((currentIds) => (
+              currentIds.includes(node.id)
+                ? currentIds.filter((nodeId) => nodeId !== node.id)
+                : [...currentIds, node.id]
+            ));
+            setIsNodeEditorOpen(false);
+          } else {
+            setSelectedNodeIds([node.id]);
+          }
+
+          setSelectedEdgeId(null);
+          setEditTarget('people');
+          setIsLineStyleMenuOpen(false);
         }}
         onEdgeClick={(_, edge) => {
           setSelectedEdgeId(edge.id);
-          setSelectedNodeId(null);
+          setSelectedNodeIds([]);
           setIsNodeEditorOpen(false);
+          setIsLineStyleMenuOpen(false);
+          setControllerMode('edit');
+          setEditTarget('line');
         }}
         onPaneClick={() => {
-          setSelectedNodeId(null);
+          setSelectedNodeIds([]);
           setSelectedEdgeId(null);
           setIsNodeEditorOpen(false);
+          setIsLineStyleMenuOpen(false);
         }}
+        selectionMode={SelectionMode.Partial}
+        selectionOnDrag={isLassoMode}
+        panOnDrag={!isLassoMode}
         proOptions={{ hideAttribution: true }}
         fitView
       >
@@ -414,13 +547,19 @@ export default function App() {
         
       </ReactFlow>
 
-      <aside className={`tree-controller ${isNodeEditorOpen ? 'expanded-node-editor' : ''}`} aria-label="Tree controller">
+      <aside
+        ref={controllerRef}
+        className={`tree-controller ${isNodeEditorOpen ? 'expanded-node-editor' : ''}`}
+        aria-label="Tree controller"
+      >
         <div className="controller-tabs">
           <button
             type="button"
             className={controllerMode === 'edit' ? 'active-controller-tab' : 'muted-controller-tab'}
             aria-label="Edit"
-            onClick={() => setControllerMode('edit')}
+            onClick={() => {
+              setControllerMode('edit');
+            }}
           >
             <FontAwesomeIcon icon={faPenToSquare} />
           </button>
@@ -431,6 +570,7 @@ export default function App() {
             onClick={() => {
               setControllerMode('view');
               setIsNodeEditorOpen(false);
+              setIsLineStyleMenuOpen(false);
             }}
           >
             <FontAwesomeIcon icon={faEye} />
@@ -442,6 +582,7 @@ export default function App() {
             onClick={() => {
               setControllerMode('import-export');
               setIsNodeEditorOpen(false);
+              setIsLineStyleMenuOpen(false);
             }}
           >
             <FontAwesomeIcon icon={faUpload} />
@@ -449,11 +590,76 @@ export default function App() {
         </div>
 
         {controllerMode === 'edit' && (
-          <div className="controller-panel">
-            {!isNodeEditorOpen && (
+          <>
+            <div className="edit-target-tabs" aria-label="Edit target">
+              <button
+                type="button"
+                className={editTarget === 'people' ? 'active-edit-target' : ''}
+                aria-label="People"
+                onClick={() => {
+                  setEditTarget('people');
+                  setIsLineStyleMenuOpen(false);
+                }}
+              >
+                <FontAwesomeIcon icon={faUser} />
+              </button>
+              <button
+                type="button"
+                className={editTarget === 'line' ? 'active-edit-target' : ''}
+                aria-label="Line"
+                onClick={() => {
+                  setEditTarget('line');
+                  setIsNodeEditorOpen(false);
+                }}
+              >
+                <span className="horizontal-line-icon" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="controller-panel">
+              {showLineTools && (
+                <div className="relationship-editor-panel">
+                  <label className={`controller-action color-picker-action ${!selectedEdge ? 'disabled-controller-action' : ''}`}>
+                  Edit line color
+                  <input
+                    type="color"
+                    value={selectedEdge?.data?.color || '#9da19a'}
+                    disabled={!selectedEdge}
+                    onChange={(event) => updateSelectedEdgeColor(event.target.value)}
+                  />
+                </label>
+                <div className="line-style-picker">
+                  <button
+                    type="button"
+                    className="controller-action"
+                    disabled={!selectedEdge}
+                    onClick={() => setIsLineStyleMenuOpen((isOpen) => !isOpen)}
+                  >
+                    Line style
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="controller-action"
+                  onClick={deleteSelectedEdge}
+                  disabled={!selectedEdge}
+                >
+                  Delete line
+                </button>
+                <button
+                  type="button"
+                  className={`controller-action controller-toggle-action ${isLassoMode ? 'active-toggle-action' : ''}`}
+                  onClick={toggleLassoMode}
+                >
+                  Lasso
+                </button>
+              </div>
+            )}
+
+            {showPeopleTools && !isNodeEditorOpen && (
               <>
                 <button type="button" className="controller-action" onClick={addNode}>
-                  Add node
+                  Add person
                 </button>
                 <button
                   type="button"
@@ -461,23 +667,30 @@ export default function App() {
                   onClick={() => setIsNodeEditorOpen(true)}
                   disabled={!selectedNode}
                 >
-                  Edit node
+                  Edit person
                 </button>
                 <button
                   type="button"
                   className="controller-action"
                   onClick={deleteSelectedNode}
-                  disabled={!selectedNode}
+                  disabled={!hasSelectedNodes}
                 >
-                  Delete node
+                  Delete person
+                </button>
+                <button
+                  type="button"
+                  className={`controller-action controller-toggle-action ${isLassoMode ? 'active-toggle-action' : ''}`}
+                  onClick={toggleLassoMode}
+                >
+                  Lasso
                 </button>
               </>
             )}
 
-            {isNodeEditorOpen && selectedNode && (
+            {showPeopleTools && isNodeEditorOpen && selectedNode && (
               <div className="node-editor-panel">
                 <label className="controller-action color-picker-action">
-                  Add color
+                  Edit color
                   <input
                     type="color"
                     value={selectedNode.data.color || '#ffffff'}
@@ -504,6 +717,39 @@ export default function App() {
                 Redo
               </button>
             </div>
+            </div>
+          </>
+        )}
+
+        {showLineTools && selectedEdge && isLineStyleMenuOpen && (
+          <div className="line-style-menu" aria-label="Line style options">
+            {lineStyleOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={(selectedEdge.data?.lineStyle || 'solid') === option.id ? 'active-line-style' : ''}
+                aria-label={option.label}
+                title={option.label}
+                onClick={() => updateSelectedEdgeLineStyle(option.id)}
+              >
+                <svg
+                  className="line-style-preview"
+                  viewBox="0 0 120 12"
+                  aria-hidden="true"
+                >
+                  <line
+                    x1="4"
+                    y1="6"
+                    x2="116"
+                    y2="6"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray={getLineDasharray(option.id)}
+                  />
+                </svg>
+              </button>
+            ))}
           </div>
         )}
       

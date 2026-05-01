@@ -30,29 +30,29 @@ body {
   top: 50%;
   z-index: 10;
   width: 250px;
-  min-height: 308px;
+  height: 430px;
   max-height: calc(100vh - 48px);
   padding: 14px 10px 16px;
   border-radius: 28px;
   background: #8f908d;
   box-shadow: 0 14px 30px rgb(34 36 38 / 16%);
   transform: translateY(-50%);
-  overflow: hidden;
-  transition: min-height 180ms ease, width 180ms ease;
+  overflow: visible;
 }
 
 .tree-controller.expanded-node-editor {
-  min-height: 374px;
+  height: 430px;
 }
 
 .controller-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 
 .controller-tabs button,
+.edit-target-tabs button,
 .controller-action,
 .controller-history-actions button {
   border: 0;
@@ -70,7 +70,38 @@ body {
   font-size: 17px;
 }
 
+.edit-target-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 0 auto 18px;
+}
+
+.edit-target-tabs button {
+  display: grid;
+  height: 38px;
+  width: 100%;
+  min-width: 0;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 17px;
+  opacity: 0.44;
+}
+
+.edit-target-tabs button.active-edit-target {
+  opacity: 1;
+}
+
+.horizontal-line-icon {
+  display: block;
+  width: 28px;
+  border-top: 3px solid currentColor;
+  border-radius: 999px;
+}
+
 .controller-tabs button:hover:not(:disabled),
+.edit-target-tabs button:hover:not(:disabled),
 .controller-action:hover:not(:disabled),
 .controller-history-actions button:hover:not(:disabled) {
   background: #fff0b8;
@@ -86,13 +117,15 @@ body {
 
 .controller-panel {
   display: flex;
-  min-height: 220px;
+  height: calc(100% - 116px);
   flex-direction: column;
   gap: 12px;
+  overflow: visible;
+  padding-bottom: 2px;
 }
 
 .expanded-node-editor .controller-panel {
-  min-height: 286px;
+  height: calc(100% - 116px);
 }
 
 .controller-action {
@@ -102,6 +135,19 @@ body {
   border-radius: 999px;
   font-size: 16px;
   font-weight: 600;
+}
+
+.controller-toggle-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.controller-toggle-action.active-toggle-action {
+  background: #dcebe6;
+  color: #173d33;
+  box-shadow: inset 0 0 0 2px rgb(58 125 107 / 42%);
 }
 
 .color-picker-action {
@@ -122,6 +168,13 @@ body {
 }
 
 .controller-action:disabled {
+  background: #e4d399;
+  color: #5b5b56;
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.disabled-controller-action {
   background: #e4d399;
   color: #5b5b56;
   cursor: not-allowed;
@@ -161,6 +214,65 @@ body {
   flex-direction: column;
   gap: 12px;
   padding-top: 18px;
+}
+
+.relationship-editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+  min-height: 188px;
+  padding-block: 8px;
+}
+
+.line-style-picker {
+  position: relative;
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
+.line-style-picker .controller-action {
+  width: calc(100% - 28px);
+}
+
+.line-style-menu {
+  position: absolute;
+  top: 228px;
+  right: calc(100% + 18px);
+  z-index: 20;
+  display: grid;
+  width: 160px;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 14px;
+  background: #767772;
+  box-shadow: 0 12px 24px rgb(34 36 38 / 18%);
+  transform: translateY(-50%);
+}
+
+.line-style-menu button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: #efdf9f;
+  color: #20231f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.line-style-menu button:hover,
+.line-style-menu button.active-line-style {
+  background: #fff0b8;
+}
+
+.line-style-preview {
+  display: block;
+  width: 76%;
+  height: 14px;
+  margin: 0 auto;
 }
 
 .person-node {
