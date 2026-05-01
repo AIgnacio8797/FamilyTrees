@@ -30,7 +30,7 @@ body {
   top: 50%;
   z-index: 10;
   width: 250px;
-  height: 430px;
+  height: 404px;
   max-height: calc(100vh - 48px);
   padding: 14px 10px 16px;
   border-radius: 28px;
@@ -41,14 +41,16 @@ body {
 }
 
 .tree-controller.expanded-node-editor {
-  height: 430px;
+  height: 404px;
 }
 
 .controller-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #b9bab5;
 }
 
 .controller-tabs button,
@@ -72,8 +74,9 @@ body {
 
 .edit-target-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 96px));
   gap: 8px;
+  justify-content: center;
   width: 100%;
   margin: 0 auto 18px;
 }
@@ -185,7 +188,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  margin-top: auto;
+  margin-top: 6px;
   padding-inline: 18px;
 }
 
@@ -209,20 +212,18 @@ body {
   font-weight: 700;
 }
 
-.node-editor-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 18px;
+.controller-tool-stack {
+  display: grid;
+  grid-template-rows: repeat(4, 40px);
+  row-gap: 12px;
+  padding-top: 0;
+  align-content: start;
 }
 
+.people-editor-panel,
+.node-editor-panel,
 .relationship-editor-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  justify-content: center;
-  min-height: 188px;
-  padding-block: 8px;
+  min-height: 0;
 }
 
 .line-style-picker {

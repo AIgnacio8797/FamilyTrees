@@ -73,6 +73,7 @@ export default function App() {
   const [editTarget, setEditTarget] = useState('people');
   const [isNodeEditorOpen, setIsNodeEditorOpen] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
   const [editingNodeId, setEditingNodeId] = useState(null);
   const [isLassoMode, setIsLassoMode] = useState(false);
@@ -80,6 +81,7 @@ export default function App() {
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const isDraggingNodeRef = useRef(false);
   const treeRef = useRef(tree);
+  const historyRef = useRef(history);
   const controllerRef = useRef(null);
   const { nodes, edges } = tree;
 
@@ -87,75 +89,77 @@ export default function App() {
     treeRef.current = tree;
   }, [tree]);
 
-  const rememberTree = useCallback((snapshot) => {
-    setHistory((historySnapshot) => ({
-      past: [...historySnapshot.past, snapshot].slice(-80),
-      future: [],
-    }));
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+
+  const clearInteractionState = useCallback(() => {
+    setSelectedNodeIds([]);
+    setSelectedEdgeIds([]);
+    setSelectedEdgeId(null);
+    setEditingNodeId(null);
+    setIsNodeEditorOpen(false);
+    setIsLineStyleMenuOpen(false);
+  }, []);
+
+  const commitTree = useCallback((nextTree, { record = true } = {}) => {
+    const currentTree = treeRef.current;
+
+    if (record) {
+      const nextHistory = {
+        past: [...historyRef.current.past, currentTree].slice(-80),
+        future: [],
+      };
+
+      historyRef.current = nextHistory;
+      setHistory(nextHistory);
+    }
+
+    treeRef.current = nextTree;
+    setTree(nextTree);
   }, []);
 
   const updateTree = useCallback((updater, { record = true } = {}) => {
-    setTree((treeSnapshot) => {
-      const nextTree = updater(treeSnapshot);
+    const nextTree = updater(treeRef.current);
 
-      if (record) {
-        rememberTree(treeSnapshot);
-      }
-
-      treeRef.current = nextTree;
-      return nextTree;
-    });
-  }, [rememberTree]);
+    commitTree(nextTree, { record });
+  }, [commitTree]);
 
   const undo = useCallback(() => {
-    setHistory((historySnapshot) => {
-      if (historySnapshot.past.length === 0) return historySnapshot;
+    const historySnapshot = historyRef.current;
 
-      const previousTree = historySnapshot.past.at(-1);
-      const currentTree = treeRef.current;
+    if (historySnapshot.past.length === 0) return;
 
-      setTree(() => {
-        setSelectedNodeIds([]);
-        setSelectedEdgeId(null);
-        setEditingNodeId(null);
-        setIsNodeEditorOpen(false);
-        setIsLineStyleMenuOpen(false);
-        treeRef.current = previousTree;
+    const previousTree = historySnapshot.past.at(-1);
+    const nextHistory = {
+      past: historySnapshot.past.slice(0, -1),
+      future: [treeRef.current, ...historySnapshot.future],
+    };
 
-        return previousTree;
-      });
-
-      return {
-        past: historySnapshot.past.slice(0, -1),
-        future: [currentTree, ...historySnapshot.future],
-      };
-    });
-  }, []);
+    historyRef.current = nextHistory;
+    treeRef.current = previousTree;
+    setHistory(nextHistory);
+    setTree(previousTree);
+    clearInteractionState();
+  }, [clearInteractionState]);
 
   const redo = useCallback(() => {
-    setHistory((historySnapshot) => {
-      if (historySnapshot.future.length === 0) return historySnapshot;
+    const historySnapshot = historyRef.current;
 
-      const nextTree = historySnapshot.future[0];
-      const currentTree = treeRef.current;
+    if (historySnapshot.future.length === 0) return;
 
-      setTree(() => {
-        setSelectedNodeIds([]);
-        setSelectedEdgeId(null);
-        setEditingNodeId(null);
-        setIsNodeEditorOpen(false);
-        setIsLineStyleMenuOpen(false);
-        treeRef.current = nextTree;
+    const nextTree = historySnapshot.future[0];
+    const nextHistory = {
+      past: [...historySnapshot.past, treeRef.current].slice(-80),
+      future: historySnapshot.future.slice(1),
+    };
 
-        return nextTree;
-      });
-
-      return {
-        past: [...historySnapshot.past, currentTree],
-        future: historySnapshot.future.slice(1),
-      };
-    });
-  }, []);
+    historyRef.current = nextHistory;
+    treeRef.current = nextTree;
+    setHistory(nextHistory);
+    setTree(nextTree);
+    clearInteractionState();
+  }, [clearInteractionState]);
  
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -251,6 +255,7 @@ export default function App() {
 
   const toggleLassoMode = useCallback(() => {
     setIsLassoMode((isActive) => !isActive);
+    setSelectedEdgeIds([]);
     setSelectedEdgeId(null);
     setIsNodeEditorOpen(false);
     setIsLineStyleMenuOpen(false);
@@ -260,6 +265,7 @@ export default function App() {
   const selectedNode = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : null;
   const selectedEdge = selectedEdgeId ? edges.find((edge) => edge.id === selectedEdgeId) : null;
   const hasSelectedNodes = selectedNodeIds.length > 0;
+  const hasSelectedEdges = selectedEdgeIds.length > 0;
 
   const addRelative = useCallback((relationship) => {
     if (!selectedNode) return;
@@ -307,6 +313,7 @@ export default function App() {
       edges: [...treeSnapshot.edges, edgeByRelationship[relationship]],
     }));
     setSelectedNodeIds([newNodeId]);
+    setSelectedEdgeIds([]);
     setSelectedEdgeId(null);
   }, [selectedNode, updateTree]);
 
@@ -335,6 +342,7 @@ export default function App() {
       nodes: [...treeSnapshot.nodes, newNode],
     }));
     setSelectedNodeIds([newNodeId]);
+    setSelectedEdgeIds([]);
     setSelectedEdgeId(null);
   }, [nodes.length, reactFlowInstance, updateTree]);
 
@@ -348,6 +356,7 @@ export default function App() {
       )),
     }));
     setSelectedNodeIds([]);
+    setSelectedEdgeIds([]);
     setSelectedEdgeId(null);
     setEditingNodeId(null);
     setIsNodeEditorOpen(false);
@@ -396,15 +405,18 @@ export default function App() {
   }, [selectedEdgeId, updateTree]);
 
   const deleteSelectedEdge = useCallback(() => {
-    if (!selectedEdgeId) return;
+    if (!selectedEdgeId && !hasSelectedEdges) return;
 
     updateTree((treeSnapshot) => ({
       ...treeSnapshot,
-      edges: treeSnapshot.edges.filter((edge) => edge.id !== selectedEdgeId),
+      edges: treeSnapshot.edges.filter((edge) => (
+        selectedEdgeId ? edge.id !== selectedEdgeId : !selectedEdgeIds.includes(edge.id)
+      )),
     }));
+    setSelectedEdgeIds([]);
     setSelectedEdgeId(null);
     setIsLineStyleMenuOpen(false);
-  }, [selectedEdgeId, updateTree]);
+  }, [hasSelectedEdges, selectedEdgeId, selectedEdgeIds, updateTree]);
 
   const updateSelectedEdgeLineStyle = useCallback((lineStyle) => {
     if (!selectedEdgeId) return;
@@ -476,7 +488,7 @@ export default function App() {
         edges={edges.map((edge) => ({
           ...edge,
           type: 'relationship',
-          selected: edge.id === selectedEdgeId,
+          selected: edge.id === selectedEdgeId || selectedEdgeIds.includes(edge.id),
           style: {
             ...edge.style,
             stroke: edge.data?.color || edge.style?.stroke,
@@ -497,11 +509,20 @@ export default function App() {
         onSelectionChange={({ nodes: selectedNodes }) => {
           if (!isLassoMode) return;
 
-          setSelectedNodeIds(selectedNodes.map((node) => node.id));
+          const nextSelectedNodeIds = selectedNodes.map((node) => node.id);
+          const nextSelectedEdgeIds = edges
+            .filter((edge) => (
+              nextSelectedNodeIds.includes(edge.source) && nextSelectedNodeIds.includes(edge.target)
+            ))
+            .map((edge) => edge.id);
+
+          setSelectedNodeIds(nextSelectedNodeIds);
+          setSelectedEdgeIds(nextSelectedEdgeIds);
           setSelectedEdgeId(null);
           setIsNodeEditorOpen(false);
         }}
         onNodeClick={(event, node) => {
+          setIsLassoMode(false);
           if (event.shiftKey) {
             setSelectedNodeIds((currentIds) => (
               currentIds.includes(node.id)
@@ -513,11 +534,14 @@ export default function App() {
             setSelectedNodeIds([node.id]);
           }
 
+          setSelectedEdgeIds([]);
           setSelectedEdgeId(null);
           setEditTarget('people');
           setIsLineStyleMenuOpen(false);
         }}
         onEdgeClick={(_, edge) => {
+          setIsLassoMode(false);
+          setSelectedEdgeIds([]);
           setSelectedEdgeId(edge.id);
           setSelectedNodeIds([]);
           setIsNodeEditorOpen(false);
@@ -527,6 +551,7 @@ export default function App() {
         }}
         onPaneClick={() => {
           setSelectedNodeIds([]);
+          setSelectedEdgeIds([]);
           setSelectedEdgeId(null);
           setIsNodeEditorOpen(false);
           setIsLineStyleMenuOpen(false);
@@ -617,8 +642,8 @@ export default function App() {
             </div>
 
             <div className="controller-panel">
-              {showLineTools && (
-                <div className="relationship-editor-panel">
+            {showLineTools && (
+                <div className="controller-tool-stack relationship-editor-panel">
                   <label className={`controller-action color-picker-action ${!selectedEdge ? 'disabled-controller-action' : ''}`}>
                   Edit line color
                   <input
@@ -642,7 +667,7 @@ export default function App() {
                   type="button"
                   className="controller-action"
                   onClick={deleteSelectedEdge}
-                  disabled={!selectedEdge}
+                  disabled={!selectedEdge && !hasSelectedEdges}
                 >
                   Delete line
                 </button>
@@ -657,7 +682,7 @@ export default function App() {
             )}
 
             {showPeopleTools && !isNodeEditorOpen && (
-              <>
+              <div className="controller-tool-stack people-editor-panel">
                 <button type="button" className="controller-action" onClick={addNode}>
                   Add person
                 </button>
@@ -684,11 +709,11 @@ export default function App() {
                 >
                   Lasso
                 </button>
-              </>
+              </div>
             )}
 
             {showPeopleTools && isNodeEditorOpen && selectedNode && (
-              <div className="node-editor-panel">
+              <div className="controller-tool-stack node-editor-panel">
                 <label className="controller-action color-picker-action">
                   Edit color
                   <input
