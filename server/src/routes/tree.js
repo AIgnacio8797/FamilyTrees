@@ -83,7 +83,7 @@ router.put('/:id', async (req, res) => {
     }
 })
 
-// Delete tree data by ID
+// Remove tree data by ID
 
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
@@ -101,6 +101,8 @@ router.delete('/:id', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
+
 
 
 export default router;

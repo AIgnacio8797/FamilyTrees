@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faCircleCheck,
+  faCircleExclamation,
+  faSpinner,
+} from '@fortawesome/free-solid-svg-icons';
 import {
   ReactFlow,
   applyNodeChanges,
@@ -25,6 +31,7 @@ import {
 } from './utils/treeData';
 import './index.css';
 import '@xyflow/react/dist/style.css';
+import treeApi from './api/trees.js';
 
 const nodeTypes = {
   person: PersonNode,
@@ -39,10 +46,14 @@ export default function App() {
   const [tree, setTree] = useState(() => (
     initialLocalDraft?.tree || { nodes: initialNodes, edges: initialEdges }
   ));
+  const [treeTitle, setTreeTitle] = useState('Untitled Tree');
+  const [treeTitleDraft, setTreeTitleDraft] = useState('Untitled Tree');
+  const [treeId, setTreeId] = useState(null);
   const [history, setHistory] = useState({ past: [], future: [] });
   const [controllerMode, setControllerMode] = useState('edit');
   const [editTarget, setEditTarget] = useState('people');
   const [isNodeEditorOpen, setIsNodeEditorOpen] = useState(false);
+  const [isEditingTreeTitle, setIsEditingTreeTitle] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState([]);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
@@ -50,12 +61,18 @@ export default function App() {
   const [isLassoMode, setIsLassoMode] = useState(false);
   const [isLineStyleMenuOpen, setIsLineStyleMenuOpen] = useState(false);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
+  const [saveFeedback, setSaveFeedback] = useState({
+    status: 'idle',
+    message: '',
+  });
   const isDraggingNodeRef = useRef(false);
   const fileInputRef = useRef(null);
+  const treeTitleInputRef = useRef(null);
   const treeRef = useRef(tree);
   const historyRef = useRef(history);
   const controllerRef = useRef(null);
   const autosaveTimeoutRef = useRef(null);
+  const saveFeedbackTimeoutRef = useRef(null);
   const viewportRef = useRef(initialLocalDraft?.viewport || null);
   const hasAppliedInitialViewportRef = useRef(false);
   const { nodes, edges } = tree;
@@ -67,6 +84,13 @@ export default function App() {
   useEffect(() => {
     historyRef.current = history;
   }, [history]);
+
+  useEffect(() => {
+    if (!isEditingTreeTitle) return;
+
+    treeTitleInputRef.current?.focus();
+    treeTitleInputRef.current?.select();
+  }, [isEditingTreeTitle]);
 
   const flushAutosave = useCallback(() => {
     const viewport = reactFlowInstance?.getViewport() || viewportRef.current || null;
@@ -120,6 +144,53 @@ export default function App() {
     commitTree(nextTree, { record });
   }, [commitTree]);
 
+  const showSaveFeedback = useCallback((status, message, duration = 0) => {
+    if (saveFeedbackTimeoutRef.current) {
+      window.clearTimeout(saveFeedbackTimeoutRef.current);
+      saveFeedbackTimeoutRef.current = null;
+    }
+
+    setSaveFeedback({ status, message });
+
+    if (duration > 0) {
+      saveFeedbackTimeoutRef.current = window.setTimeout(() => {
+        setSaveFeedback({ status: 'idle', message: '' });
+        saveFeedbackTimeoutRef.current = null;
+      }, duration);
+    }
+  }, []);
+
+  const saveTree = async () => {
+    try {
+      showSaveFeedback('saving', 'Saving tree to server...');
+
+      const treeData = {
+        version: 1,
+        tree: {
+          nodes,
+          edges,
+        },
+        viewport: reactFlowInstance?.getViewport() || viewportRef.current || null,
+      };
+
+      if (treeId === null) {
+        const createdTree = await treeApi.createTree(treeTitle, treeData);
+        setTreeId(createdTree.id);
+        showSaveFeedback('saved', 'Tree saved to server.', 2600);
+      } else {
+        await treeApi.updateTree(treeId, treeTitle, treeData);
+        showSaveFeedback('saved', 'Changes saved to server.', 2600);
+      }
+    } catch (error) {
+      console.error('Error saving data:', error);
+      showSaveFeedback(
+        'error',
+        error instanceof Error ? error.message : 'Unable to save tree right now.',
+        4200,
+      );
+    }
+  };
+
   const undo = useCallback(() => {
     const historySnapshot = historyRef.current;
 
@@ -159,6 +230,19 @@ export default function App() {
   const exportTree = useCallback(() => {
     exportTreeToFile(treeRef.current, reactFlowInstance?.getViewport() || null);
   }, [reactFlowInstance]);
+
+  const commitTreeTitle = useCallback((nextTitle) => {
+    const trimmedTitle = nextTitle.trim();
+
+    setTreeTitle(trimmedTitle || 'Untitled Tree');
+    setTreeTitleDraft(trimmedTitle || 'Untitled Tree');
+    setIsEditingTreeTitle(false);
+  }, []);
+
+  const cancelTreeTitleEditing = useCallback(() => {
+    setTreeTitleDraft(treeTitle);
+    setIsEditingTreeTitle(false);
+  }, [treeTitle]);
 
   const loadTreeFromFile = useCallback((event) => {
     const file = event.target.files?.[0];
@@ -210,6 +294,10 @@ export default function App() {
   useEffect(() => () => {
     if (autosaveTimeoutRef.current) {
       window.clearTimeout(autosaveTimeoutRef.current);
+    }
+
+    if (saveFeedbackTimeoutRef.current) {
+      window.clearTimeout(saveFeedbackTimeoutRef.current);
     }
   }, []);
 
@@ -573,9 +661,72 @@ export default function App() {
       onCancelEditing: cancelEditingNode,
     },
   }));
+
+  const saveFeedbackMeta = {
+    saving: {
+      icon: faSpinner,
+      label: 'Saving',
+      iconClassName: 'save-feedback-icon saving',
+      spin: true,
+    },
+    saved: {
+      icon: faCircleCheck,
+      label: 'Saved',
+      iconClassName: 'save-feedback-icon saved',
+      spin: false,
+    },
+    error: {
+      icon: faCircleExclamation,
+      label: 'Error',
+      iconClassName: 'save-feedback-icon error',
+      spin: false,
+    },
+  };
+
+  const activeSaveFeedback = saveFeedback.status !== 'idle'
+    ? saveFeedbackMeta[saveFeedback.status]
+    : null;
  
   return (
     <div className="app-shell">
+      <div className="tree-title-banner">
+        {isEditingTreeTitle ? (
+          <input
+            ref={treeTitleInputRef}
+            type="text"
+            className="tree-title-input"
+            value={treeTitleDraft}
+            maxLength={120}
+            aria-label="Tree title"
+            onChange={(event) => setTreeTitleDraft(event.target.value)}
+            onBlur={(event) => commitTreeTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                commitTreeTitle(event.currentTarget.value);
+              }
+
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                cancelTreeTitleEditing();
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className="tree-title-display"
+            title="Double-click to edit tree title"
+            onDoubleClick={() => {
+              setTreeTitleDraft(treeTitle);
+              setIsEditingTreeTitle(true);
+            }}
+          >
+            {treeTitle}
+          </button>
+        )}
+      </div>
+
       <ReactFlow
         nodes={flowNodes}
         edges={edges.map((edge) => ({
@@ -705,6 +856,7 @@ export default function App() {
         onLoadTreeFromFile={loadTreeFromFile}
         onExportTree={exportTree}
         onOpenImportPicker={openImportPicker}
+        onSaveTree={saveTree}
         onAddNode={addNode}
         onDeleteSelectedNode={deleteSelectedNode}
         onUpdateSelectedNodeColor={updateSelectedNodeColor}
@@ -716,6 +868,18 @@ export default function App() {
         onUndo={undo}
         onRedo={redo}
       />
+
+      {activeSaveFeedback && (
+        <div className={`save-feedback-toast ${saveFeedback.status}`} role="status" aria-live="polite">
+          <div className={activeSaveFeedback.iconClassName}>
+            <FontAwesomeIcon icon={activeSaveFeedback.icon} spin={activeSaveFeedback.spin} />
+          </div>
+          <div className="save-feedback-copy">
+            <div className="save-feedback-title">{activeSaveFeedback.label}</div>
+            <div className="save-feedback-message">{saveFeedback.message}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

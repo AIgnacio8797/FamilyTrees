@@ -23,6 +23,7 @@ export function TreeController({
   onLoadTreeFromFile,
   onExportTree,
   onOpenImportPicker,
+  onSaveTree,
   onAddNode,
   onDeleteSelectedNode,
   onUpdateSelectedNodeColor,
@@ -256,9 +257,16 @@ export function TreeController({
               <button
                 type="button"
                 className="controller-action"
-                onClick={onExportTree}
+                onClick={onSaveTree}
               >
                 Save tree
+              </button>
+              <button
+                type="button"
+                className="controller-action"
+                onClick={onExportTree}
+              >
+                Export JSON
               </button>
               <button
                 type="button"
@@ -268,7 +276,8 @@ export function TreeController({
                 Load tree
               </button>
               <div className="controller-panel-note">
-                Save exports the current tree as JSON. Load restores a saved tree file.
+                Save stores the current tree in the backend. Export downloads a JSON backup.
+                Load restores a saved tree file.
               </div>
             </div>
           ) : (
