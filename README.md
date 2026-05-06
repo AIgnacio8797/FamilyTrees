@@ -1,52 +1,73 @@
 # FamilyTrees
 
-`FamilyTrees` is a browser-based family tree editor built with React, Vite, and React Flow.
+FamilyTrees is a browser-based family tree editor built with React, Vite, React Flow, and a small Express/PostgreSQL backend for persistence.
 
-This introduction is a placeholder for the final product description. The goal of the app is to let users build, edit, and eventually share family trees through a clean visual canvas with simple controls for managing people, relationships, and layouts.
+## What It Does
 
-## Current Features
-
-- Add, delete, and reposition people on the canvas
+- Create and edit people on a freeform family tree canvas
+- Connect people with relationship lines
 - Quick-add relatives from a selected person:
   - parent
   - child
   - sibling
-- Direct line-based relationships without separate visible relationship nodes
-- Edit node colors with a color picker
-- Edit line colors and line styles
-- Shift-click and lasso selection for multiple people and lines
-- Bulk line editing for selected relationships
-- Undo and redo with controller buttons and keyboard shortcuts
-- Right-side controller for edit, view, and export/import modes
+- Edit node colors
+- Edit relationship line colors and line styles
+- Select with shift-click and lasso tools
+- Bulk edit selected relationship lines
+- Undo and redo with buttons and keyboard shortcuts
+- Edit the tree title directly from the top-center title field
+- Save trees to PostgreSQL through the app UI
+- Export the current tree as JSON
+- Import a previously exported tree file
+- Autosave a local draft in the browser
 
-## Tech Stack
+## Stack
 
+### Frontend
 - React
 - Vite
 - React Flow (`@xyflow/react`)
 - Font Awesome
 
-## File Layout
+### Backend
+- Express
+- PostgreSQL
+- `pg`
+
+## Project Structure
 
 ```text
 FamilyTrees/
+|-- Design Map/
+|-- dist/
 |-- public/
 |   |-- favicon.svg
 |   `-- icons.svg
+|-- server/
+|   |-- src/
+|   |   |-- routes/
+|   |   |   `-- tree.js
+|   |   |-- utils/
+|   |   |   `-- treeValidation.js
+|   |   |-- db.js
+|   |   `-- index.js
+|   `-- package.json
 |-- src/
+|   |-- api/
+|   |   `-- trees.js
 |   |-- assets/
-|   |   |-- hero.png
-|   |   |-- react.svg
-|   |   `-- vite.svg
+|   |   `-- hero.png
 |   |-- components/
 |   |   |-- PersonNode.jsx
 |   |   |-- RelationshipEdge.jsx
 |   |   |-- RelationshipNode.jsx
-|   |   `-- RelationshipPanel.jsx
+|   |   |-- RelationshipPanel.jsx
+|   |   `-- TreeController.jsx
 |   |-- constants/
 |   |   |-- familyTree.js
 |   |   `-- lineStyles.js
-|   |-- App.css
+|   |-- utils/
+|   |   `-- treeData.js
 |   |-- App.jsx
 |   |-- index.css
 |   `-- main.jsx
@@ -57,34 +78,65 @@ FamilyTrees/
 `-- eslint.config.js
 ```
 
-## Key Files
+## Key Frontend Files
 
 - `src/App.jsx`  
-  Main canvas logic, controller state, selection behavior, and undo/redo history.
+  Main app shell, tree state, save flow, title editing, autosave, selection logic, and React Flow setup.
+
+- `src/components/TreeController.jsx`  
+  Right-side controller UI for editing, view mode, import/export, and save actions.
 
 - `src/components/PersonNode.jsx`  
-  Custom person node rendering and connection handles.
+  Custom person node rendering and inline label editing behavior.
 
 - `src/components/RelationshipEdge.jsx`  
-  Custom relationship line rendering, selected-line highlighting, and edge visuals.
+  Custom relationship edge styling and selection visuals.
 
-- `src/constants/familyTree.js`  
-  Starter tree data and default graph setup.
+- `src/utils/treeData.js`  
+  Import/export helpers, local draft persistence, and tree parsing utilities.
 
-- `src/constants/lineStyles.js`  
-  Shared line style definitions used by relationship edges.
+## Key Backend Files
 
-## Scripts
+- `server/src/index.js`  
+  Express app setup and route mounting.
+
+- `server/src/db.js`  
+  PostgreSQL pool configuration.
+
+- `server/src/routes/tree.js`  
+  CRUD routes for saving, loading, updating, and deleting trees.
+
+- `server/src/utils/treeValidation.js`  
+  Shared tree input sanitizing and validation logic.
+
+## Running The Project
+
+### Frontend
 
 ```bash
 npm install
 npm run dev
+```
+
+### Backend
+
+From the `server/` folder:
+
+```bash
+npm install
+npm run dev
+```
+
+The frontend runs through Vite, and the backend runs separately through Express. Vite proxies `/api` requests to the backend during development.
+
+## Build
+
+```bash
 npm run build
-npm run lint
-npm run preview
 ```
 
 ## Notes
 
-- The app is currently focused on editing and interaction.
-- Future work may include save/load, export/import, smarter layouts, and a polished read-only viewing mode.
+- `dist/` is retained as build output.
+- Tree saves use PostgreSQL persistence through the backend.
+- JSON export/import is still available as a separate file-based workflow.
