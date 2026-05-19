@@ -34,4 +34,15 @@ const updateTree = async (treeId, title, treeData) => {
     return await response.json();
 }
 
-export default { createTree, updateTree };
+const getTreeById = async (TreeId) => {
+    const response = await fetch(`/api/tress/${treeId}`);
+
+    if(!response.ok) {
+        const errorData = await response.json()
+        throw new err
+    }
+
+    return await response.json();
+}
+
+export default { createTree, updateTree, getTreeById };
