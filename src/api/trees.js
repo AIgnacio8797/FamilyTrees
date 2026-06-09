@@ -34,12 +34,12 @@ const updateTree = async (treeId, title, treeData) => {
     return await response.json();
 }
 
-const getTreeById = async (TreeId) => {
-    const response = await fetch(`/api/tress/${treeId}`);
+const getTreeById = async (treeId) => {
+    const response = await fetch(`/api/trees/${treeId}`);
 
-    if(!response.ok) {
-        const errorData = await response.json()
-        throw new err
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Request failed with status: ${response.status}`);
     }
 
     return await response.json();
