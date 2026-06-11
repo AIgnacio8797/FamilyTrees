@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCircleCheck,
@@ -42,13 +43,32 @@ const edgeTypes = {
 };
 
 export default function App() {
-  const [initialLocalDraft] = useState(() => loadTreeFromLocalDraft());
+  const { treeId: routeTreeId } = useParams();
+  const navigate = useNavigate();
+  const [initialLocalDraft] = useState(() => loadTreeFromLocalDraft(routeTreeId));
   const [tree, setTree] = useState(() => (
     initialLocalDraft?.tree || { nodes: initialNodes, edges: initialEdges }
   ));
-  const [treeTitle, setTreeTitle] = useState('Untitled Tree');
-  const [treeTitleDraft, setTreeTitleDraft] = useState('Untitled Tree');
-  const [treeId, setTreeId] = useState(null);
+  // The local draft belongs to a saved tree when it carries a treeId. We "adopt"
+  // that draft — keeping any unsaved edits as a safety net — when reopening the
+  // tree it belongs to: the blank route (redirected to its URL) or a matching
+  // /tree/:id (e.g. a refresh). Opening a different/shared tree fetches instead.
+  const draftTreeId = initialLocalDraft?.treeId ?? null;
+  const willAdoptDraft = Boolean(draftTreeId) && (!routeTreeId || routeTreeId === draftTreeId);
+  const adoptedDraftTreeId = willAdoptDraft ? draftTreeId : null;
+  const [treeTitle, setTreeTitle] = useState(() => (
+    willAdoptDraft ? (initialLocalDraft.title || 'Untitled Tree') : 'Untitled Tree'
+  ));
+  const [treeTitleDraft, setTreeTitleDraft] = useState(() => (
+    willAdoptDraft ? (initialLocalDraft.title || 'Untitled Tree') : 'Untitled Tree'
+  ));
+  const [treeId, setTreeId] = useState(adoptedDraftTreeId);
+  const [loadStatus, setLoadStatus] = useState(() => {
+    if (willAdoptDraft) return 'loaded'; // draft already in state; no fetch needed
+    if (routeTreeId) return 'loading'; // fetching a different / shared tree
+    return 'idle'; // blank new editor
+  });
+  const [loadError, setLoadError] = useState('');
   const [history, setHistory] = useState({ past: [], future: [] });
   const [controllerMode, setControllerMode] = useState('edit');
   const [editTarget, setEditTarget] = useState('people');
@@ -74,7 +94,15 @@ export default function App() {
   const autosaveTimeoutRef = useRef(null);
   const saveFeedbackTimeoutRef = useRef(null);
   const viewportRef = useRef(initialLocalDraft?.viewport || null);
-  const hasAppliedInitialViewportRef = useRef(false);
+  // When adopting the draft, its viewport is applied via pendingLoadViewportRef
+  // (below), and loadedTreeIdRef is pre-seeded so the fetch effect skips.
+  const hasAppliedInitialViewportRef = useRef(willAdoptDraft);
+  const loadedTreeIdRef = useRef(adoptedDraftTreeId);
+  const pendingLoadViewportRef = useRef(willAdoptDraft ? (initialLocalDraft.viewport ?? null) : undefined);
+  const treeIdRef = useRef(treeId);
+  const treeTitleRef = useRef(treeTitle);
+  const hasHandledInitialResumeRef = useRef(false);
+  const isDirtyRef = useRef(false); // edits not yet saved to the backend
   const { nodes, edges } = tree;
 
   useEffect(() => {
@@ -86,6 +114,26 @@ export default function App() {
   }, [history]);
 
   useEffect(() => {
+    treeIdRef.current = treeId;
+  }, [treeId]);
+
+  useEffect(() => {
+    treeTitleRef.current = treeTitle;
+  }, [treeTitle]);
+
+  // On the initial blank route, if the local draft belongs to a saved tree,
+  // resume it under its real /tree/:id URL. Runs once, before paint, so the
+  // backend load takes over cleanly without a flash of the detached draft.
+  useLayoutEffect(() => {
+    if (hasHandledInitialResumeRef.current) return;
+    hasHandledInitialResumeRef.current = true;
+
+    if (!routeTreeId && draftTreeId) {
+      navigate(`/tree/${draftTreeId}`, { replace: true });
+    }
+  }, [routeTreeId, draftTreeId, navigate]);
+
+  useEffect(() => {
     if (!isEditingTreeTitle) return;
 
     treeTitleInputRef.current?.focus();
@@ -94,7 +142,10 @@ export default function App() {
 
   const flushAutosave = useCallback(() => {
     const viewport = reactFlowInstance?.getViewport() || viewportRef.current || null;
-    const savedDraft = saveTreeToLocalDraft(treeRef.current, viewport);
+    const savedDraft = saveTreeToLocalDraft(treeRef.current, viewport, {
+      treeId: treeIdRef.current,
+      title: treeTitleRef.current,
+    });
 
     if (savedDraft?.viewport) {
       viewportRef.current = savedDraft.viewport;
@@ -122,6 +173,7 @@ export default function App() {
   }, []);
 
   const commitTree = useCallback((nextTree, { record = true } = {}) => {
+    isDirtyRef.current = true;
     const currentTree = treeRef.current;
 
     if (record) {
@@ -176,11 +228,17 @@ export default function App() {
       if (treeId === null) {
         const createdTree = await treeApi.createTree(treeTitle, treeData);
         setTreeId(createdTree.id);
+        // Mark as loaded so the route change below doesn't refetch what we just
+        // created, then reflect the new tree's stable URL in the address bar.
+        loadedTreeIdRef.current = createdTree.id;
+        navigate(`/tree/${createdTree.id}`);
         showSaveFeedback('saved', 'Tree saved to server.', 2600);
       } else {
         await treeApi.updateTree(treeId, treeTitle, treeData);
         showSaveFeedback('saved', 'Changes saved to server.', 2600);
       }
+
+      isDirtyRef.current = false;
     } catch (error) {
       console.error('Error saving data:', error);
       showSaveFeedback(
@@ -302,13 +360,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (event) => {
       if (autosaveTimeoutRef.current) {
         window.clearTimeout(autosaveTimeoutRef.current);
         autosaveTimeoutRef.current = null;
       }
 
       flushAutosave();
+
+      // Warn before closing/refreshing if there are edits not saved to the server.
+      // (Work is still kept in the local draft, but the durable copy isn't updated.)
+      if (isDirtyRef.current) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -319,6 +384,12 @@ export default function App() {
   useEffect(() => {
     if (!reactFlowInstance || hasAppliedInitialViewportRef.current) return;
 
+    // A tree opened from a URL manages its own viewport; skip the local draft's.
+    if (routeTreeId) {
+      hasAppliedInitialViewportRef.current = true;
+      return;
+    }
+
     const initialViewport = initialLocalDraft?.viewport;
 
     if (initialViewport) {
@@ -328,7 +399,73 @@ export default function App() {
     }
 
     hasAppliedInitialViewportRef.current = true;
-  }, [initialLocalDraft, reactFlowInstance]);
+  }, [initialLocalDraft, reactFlowInstance, routeTreeId]);
+
+  // Load a saved tree from the backend when the URL carries a tree id.
+  useEffect(() => {
+    if (!routeTreeId || loadedTreeIdRef.current === routeTreeId) return;
+
+    let cancelled = false;
+    setLoadStatus('loading');
+    setLoadError('');
+
+    (async () => {
+      try {
+        const row = await treeApi.getTreeById(routeTreeId);
+
+        if (cancelled) return;
+
+        const restoredTree = row?.tree_data?.tree;
+
+        if (!restoredTree || !Array.isArray(restoredTree.nodes) || !Array.isArray(restoredTree.edges)) {
+          throw new Error('This tree could not be opened (unexpected data format).');
+        }
+
+        // Restore the graph with a clean undo history.
+        treeRef.current = restoredTree;
+        historyRef.current = { past: [], future: [] };
+        setHistory({ past: [], future: [] });
+        setTree(restoredTree);
+        setTreeId(row.id);
+        setTreeTitle(row.title || 'Untitled Tree');
+        setTreeTitleDraft(row.title || 'Untitled Tree');
+        clearInteractionState();
+
+        const loadedViewport = row.tree_data.viewport ?? null;
+        viewportRef.current = loadedViewport;
+        pendingLoadViewportRef.current = loadedViewport; // object -> setViewport, null -> fitView
+        hasAppliedInitialViewportRef.current = true;
+
+        loadedTreeIdRef.current = routeTreeId;
+        isDirtyRef.current = false;
+        setLoadStatus('loaded');
+      } catch (error) {
+        if (cancelled) return;
+        setLoadError(error instanceof Error ? error.message : 'Unable to open this tree.');
+        setLoadStatus('error');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeTreeId, clearInteractionState]);
+
+  // Apply a loaded tree's viewport once the React Flow instance is ready.
+  useEffect(() => {
+    if (!reactFlowInstance || pendingLoadViewportRef.current === undefined) return;
+
+    const viewport = pendingLoadViewportRef.current;
+    pendingLoadViewportRef.current = undefined;
+
+    requestAnimationFrame(() => {
+      if (viewport) {
+        reactFlowInstance.setViewport(viewport, { duration: 0 });
+      } else {
+        reactFlowInstance.fitView({ duration: 250, padding: 0.18 });
+      }
+    });
+  }, [reactFlowInstance, loadStatus]);
  
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -877,6 +1014,31 @@ export default function App() {
           <div className="save-feedback-copy">
             <div className="save-feedback-title">{activeSaveFeedback.label}</div>
             <div className="save-feedback-message">{saveFeedback.message}</div>
+          </div>
+        </div>
+      )}
+
+      {routeTreeId && (loadStatus === 'loading' || loadStatus === 'error') && (
+        <div
+          className={`tree-load-overlay ${loadStatus}`}
+          role={loadStatus === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+        >
+          <div className="tree-load-card">
+            {loadStatus === 'loading' ? (
+              <>
+                <FontAwesomeIcon icon={faSpinner} spin className="tree-load-icon" />
+                <p className="tree-load-message">Loading tree…</p>
+              </>
+            ) : (
+              <>
+                <FontAwesomeIcon icon={faCircleExclamation} className="tree-load-icon error" />
+                <p className="tree-load-message">{loadError}</p>
+                <button type="button" className="tree-load-button" onClick={() => navigate('/')}>
+                  Start a new tree
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

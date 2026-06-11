@@ -1,5 +1,11 @@
 const TREE_FILE_VERSION = 1;
-const LOCAL_AUTOSAVE_STORAGE_KEY = 'familytrees.localDraft.v1';
+// Each tree gets its own draft slot so opening one tree never overwrites another
+// tree's unsaved edits. A pre-existing single-key draft is migrated on first load.
+const LEGACY_DRAFT_KEY = 'familytrees.localDraft.v1';
+const DRAFT_SLOT_PREFIX = 'familytrees.localDraft.v1.'; // + <treeId> | "new"
+const DRAFT_POINTER_KEY = 'familytrees.localDraftPointer.v1'; // most-recently-edited slot
+const NEW_TREE_SLOT = 'new';
+const MAX_DRAFTS = 25;
 const sideHandles = ['left', 'right'];
 
 export const getRelationshipFromHandles = (sourceHandle, targetHandle) => {
@@ -108,31 +114,111 @@ export const exportTreeToFile = (tree, viewport) => {
   URL.revokeObjectURL(url);
 };
 
-export const saveTreeToLocalDraft = (tree, viewport) => {
+const draftSlotKey = (treeId) => `${DRAFT_SLOT_PREFIX}${treeId || NEW_TREE_SLOT}`;
+
+// Move a pre-existing single-key draft into the per-tree scheme (runs once).
+const migrateLegacyDraft = () => {
+  const legacy = window.localStorage.getItem(LEGACY_DRAFT_KEY);
+
+  if (!legacy) return;
+
+  try {
+    const stored = JSON.parse(legacy);
+    const treeId = typeof stored?.treeId === 'string' ? stored.treeId : null;
+    const slotKey = draftSlotKey(treeId);
+
+    if (!window.localStorage.getItem(slotKey)) {
+      window.localStorage.setItem(slotKey, legacy);
+      window.localStorage.setItem(DRAFT_POINTER_KEY, slotKey);
+    }
+  } catch {
+    // discard a malformed legacy draft
+  }
+
+  window.localStorage.removeItem(LEGACY_DRAFT_KEY);
+};
+
+// Keep only the most recent MAX_DRAFTS slots so storage can't grow without bound.
+const enforceDraftCap = () => {
+  const slots = [];
+
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i);
+
+    if (!key || !key.startsWith(DRAFT_SLOT_PREFIX)) continue;
+
+    let savedAt = '';
+
+    try {
+      savedAt = JSON.parse(window.localStorage.getItem(key))?.savedAt || '';
+    } catch {
+      savedAt = '';
+    }
+
+    slots.push({ key, savedAt });
+  }
+
+  if (slots.length <= MAX_DRAFTS) return;
+
+  slots.sort((a, b) => a.savedAt.localeCompare(b.savedAt));
+
+  for (let i = 0; i < slots.length - MAX_DRAFTS; i += 1) {
+    window.localStorage.removeItem(slots[i].key);
+  }
+};
+
+export const saveTreeToLocalDraft = (tree, viewport, meta = {}) => {
   if (typeof window === 'undefined') return null;
+
+  // Identity of the backend record this draft belongs to (null for an unsaved
+  // new tree). The draft lives in that tree's own slot so it stays isolated from
+  // other trees' drafts.
+  const treeId = typeof meta.treeId === 'string' ? meta.treeId : null;
+  const slotKey = draftSlotKey(treeId);
 
   const payload = {
     version: TREE_FILE_VERSION,
     savedAt: new Date().toISOString(),
+    treeId,
+    title: typeof meta.title === 'string' ? meta.title : null,
     tree,
     viewport: viewport || null,
   };
 
-  window.localStorage.setItem(LOCAL_AUTOSAVE_STORAGE_KEY, JSON.stringify(payload));
+  window.localStorage.setItem(slotKey, JSON.stringify(payload));
+  window.localStorage.setItem(DRAFT_POINTER_KEY, slotKey);
+  enforceDraftCap();
+
   return payload;
 };
 
-export const loadTreeFromLocalDraft = () => {
+// Load a specific tree's draft, or (with no id) the most recently edited one.
+export const loadTreeFromLocalDraft = (treeId) => {
   if (typeof window === 'undefined') return null;
 
-  const rawDraft = window.localStorage.getItem(LOCAL_AUTOSAVE_STORAGE_KEY);
+  migrateLegacyDraft();
+
+  const slotKey = treeId
+    ? draftSlotKey(treeId)
+    : window.localStorage.getItem(DRAFT_POINTER_KEY);
+
+  if (!slotKey) return null;
+
+  const rawDraft = window.localStorage.getItem(slotKey);
 
   if (!rawDraft) return null;
 
   try {
-    return parseImportedTree(rawDraft);
+    const parsed = parseImportedTree(rawDraft);
+    const stored = JSON.parse(rawDraft);
+
+    return {
+      ...parsed,
+      treeId: typeof stored?.treeId === 'string' ? stored.treeId : null,
+      title: typeof stored?.title === 'string' ? stored.title : null,
+    };
   } catch {
-    window.localStorage.removeItem(LOCAL_AUTOSAVE_STORAGE_KEY);
+    window.localStorage.removeItem(slotKey);
     return null;
   }
 };
