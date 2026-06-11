@@ -175,6 +175,81 @@ body {
   box-shadow: 0 14px 30px rgb(34 36 38 / 16%);
   transform: translateY(-50%);
   overflow: visible;
+  transition: transform 320ms ease;
+}
+
+/* View mode: slide the controller off-screen to the right. */
+.tree-controller.controller-hidden {
+  transform: translate(calc(100% + 48px), -50%);
+}
+
+/* Small chevron on the controller's left edge to re-hide it (view mode only). */
+.controller-hide-toggle {
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tree-sun);
+  color: var(--tree-text);
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgb(34 36 38 / 22%);
+  transform: translateY(-50%);
+  transition: background-color 140ms ease;
+}
+
+.controller-hide-toggle:hover {
+  background: var(--tree-sun-hover);
+}
+
+/* Floating button to bring the hidden controller back. */
+.controller-reveal {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 16px 0 0 16px;
+  background: var(--tree-canopy-dark);
+  color: var(--tree-sun);
+  cursor: pointer;
+  transform: translateY(-50%);
+  box-shadow: 0 10px 24px rgb(34 36 38 / 20%);
+  animation: controller-reveal-pulse 1.8s ease-in-out infinite;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.controller-reveal:hover {
+  background: var(--tree-bark);
+  color: #fff;
+  animation: none;
+}
+
+.controller-reveal-icon {
+  font-size: 18px;
+}
+
+.controller-reveal-arrow {
+  font-size: 12px;
+}
+
+@keyframes controller-reveal-pulse {
+  0%, 100% {
+    box-shadow: 0 10px 24px rgb(34 36 38 / 20%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px rgb(247 230 134 / 50%), 0 10px 24px rgb(34 36 38 / 20%);
+  }
 }
 
 .hidden-file-input {
@@ -465,7 +540,7 @@ body {
   border: 0;
   background: transparent;
   color: #20231f;
-  cursor: grab;
+  cursor: move;
   font: inherit;
   font-size: 14px;
   font-weight: 700;
@@ -474,7 +549,23 @@ body {
 }
 
 .person-node-label:active {
-  cursor: grabbing;
+  cursor: move;
+}
+
+/* Canvas: white open hand by default, white closed fist while panning.
+   Inlined as data URIs (not external files) so there's no async image-load
+   race — Chrome otherwise flickers back to the OS cursor until a repaint. */
+.react-flow__pane {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 512 512'%3E%3Cpath fill='%23fff' stroke='%231f1f1f' stroke-width='26' stroke-linejoin='round' d='M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 208c0 8.8-7.2 16-16 16s-16-7.2-16-16l0-176c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 272c0 1.5 0 3.1 .1 4.6L67.6 283c-16-15.2-41.3-14.6-56.6 1.4S-3.6 325.7 12.4 341L124.8 448c43.1 41.1 100.4 64 160 64l19.2 0c97.2 0 176-78.8 176-176l0-208c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 112c0 8.8-7.2 16-16 16s-16-7.2-16-16l0-176c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 176c0 8.8-7.2 16-16 16s-16-7.2-16-16l0-208z'/%3E%3C/svg%3E") 9 8, grab;
+}
+
+.react-flow__pane.dragging {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 512 512'%3E%3Cpath fill='%23fff' stroke='%231f1f1f' stroke-width='26' stroke-linejoin='round' d='M7.4 253.6C2.6 245.9 0 237.1 0 228l0-36c0-26.5 21.5-48 48-48l16 0 0-80c0-26.5 21.5-48 48-48 17.3 0 32.4 9.1 40.9 22.8 4.3-22.1 23.8-38.8 47.1-38.8 23.4 0 42.9 16.8 47.1 38.9 7.3-4.4 15.8-6.9 24.9-6.9 22.1 0 40.8 15 46.3 35.4 5.5-2.2 11.4-3.4 17.7-3.4 26.5 0 48 21.5 48 48l0 96.9c0 9.9-2.3 19.7-6.8 28.6l-39.6 79.1c-10.8 21.7-33 35.4-57.2 35.4L96 352c-16.5 0-31.8-8.4-40.6-22.4l-48-76zM32 480l0-48c0-17.7 14.3-32 32-32l256 0c17.7 0 32 14.3 32 32l0 48c0 17.7-14.3 32-32 32L64 512c-17.7 0-32-14.3-32-32z'/%3E%3C/svg%3E") 9 9, grabbing;
+}
+
+/* Nodes: 4-direction move cursor in every mode. */
+.react-flow__node-person {
+  cursor: move;
 }
 
 .person-node-input {
@@ -649,6 +740,15 @@ body {
   border-color: #3a7d6b;
   background: #dcebe6;
   color: #173d33;
+}
+
+.view-mode .react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.view-mode-note {
+  align-self: center;
 }
 
 .tree-load-overlay {

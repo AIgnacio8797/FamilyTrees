@@ -2,8 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useNavigate, useParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
+  faChevronLeft,
   faCircleCheck,
   faCircleExclamation,
+  faSliders,
   faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
 import {
@@ -71,6 +73,8 @@ export default function App() {
   const [loadError, setLoadError] = useState('');
   const [history, setHistory] = useState({ past: [], future: [] });
   const [controllerMode, setControllerMode] = useState('edit');
+  const [isControllerHidden, setIsControllerHidden] = useState(false);
+  const [viewPositions, setViewPositions] = useState({}); // ephemeral view-mode drags
   const [editTarget, setEditTarget] = useState('people');
   const [isNodeEditorOpen, setIsNodeEditorOpen] = useState(false);
   const [isEditingTreeTitle, setIsEditingTreeTitle] = useState(false);
@@ -104,6 +108,7 @@ export default function App() {
   const hasHandledInitialResumeRef = useRef(false);
   const isDirtyRef = useRef(false); // edits not yet saved to the backend
   const { nodes, edges } = tree;
+  const isViewMode = controllerMode === 'view';
 
   useEffect(() => {
     treeRef.current = tree;
@@ -171,6 +176,13 @@ export default function App() {
     setIsNodeEditorOpen(false);
     setIsLineStyleMenuOpen(false);
   }, []);
+
+  const enterViewMode = useCallback(() => {
+    setControllerMode('view');
+    setIsLassoMode(false);
+    setViewPositions({});
+    clearInteractionState();
+  }, [clearInteractionState]);
 
   const commitTree = useCallback((nextTree, { record = true } = {}) => {
     isDirtyRef.current = true;
@@ -244,6 +256,45 @@ export default function App() {
       showSaveFeedback(
         'error',
         error instanceof Error ? error.message : 'Unable to save tree right now.',
+        4200,
+      );
+    }
+  };
+
+  // Persist a view-mode rearrangement as a separate new tree, leaving the
+  // original untouched. Applies the ephemeral positions, then creates a copy.
+  const saveAsNewLayout = async () => {
+    try {
+      showSaveFeedback('saving', 'Saving layout as a new tree...');
+
+      const layoutNodes = treeRef.current.nodes.map((node) => ({
+        ...node,
+        position: viewPositions[node.id] || node.position,
+      }));
+      const nextTree = { nodes: layoutNodes, edges: treeRef.current.edges };
+      const newTitle = `${treeTitle} (new layout)`;
+      const treeData = {
+        version: 1,
+        tree: nextTree,
+        viewport: reactFlowInstance?.getViewport() || viewportRef.current || null,
+      };
+
+      const created = await treeApi.createTree(newTitle, treeData);
+
+      commitTree(nextTree, { record: false });
+      setTreeId(created.id);
+      setTreeTitle(newTitle);
+      setTreeTitleDraft(newTitle);
+      loadedTreeIdRef.current = created.id;
+      setViewPositions({});
+      isDirtyRef.current = false;
+      navigate(`/tree/${created.id}`);
+      showSaveFeedback('saved', 'Saved as a new tree.', 2600);
+    } catch (error) {
+      console.error('Error saving layout:', error);
+      showSaveFeedback(
+        'error',
+        error instanceof Error ? error.message : 'Unable to save this layout.',
         4200,
       );
     }
@@ -509,6 +560,25 @@ export default function App() {
   const onNodesChange = useCallback((changes) => {
     if (changes.every((change) => change.type === 'select')) return;
 
+    if (isViewMode) {
+      // View mode: move nodes only on screen. Never touch the saved tree,
+      // history, dirty state, or autosave — so viewing can't overwrite a save.
+      setViewPositions((current) => {
+        let changed = false;
+        const next = { ...current };
+
+        for (const change of changes) {
+          if (change.type === 'position' && change.position) {
+            next[change.id] = change.position;
+            changed = true;
+          }
+        }
+
+        return changed ? next : current;
+      });
+      return;
+    }
+
     const hasPositionChange = changes.some((change) => change.type === 'position');
     const isDragging = changes.some((change) => change.type === 'position' && change.dragging);
     const shouldRecordDragStart = isDragging && !isDraggingNodeRef.current;
@@ -528,7 +598,7 @@ export default function App() {
       ...treeSnapshot,
       nodes: applyNodeChanges(changes, treeSnapshot.nodes),
     }), { record: shouldRecordDragStart || shouldRecordNonDragChange });
-  }, [updateTree]);
+  }, [updateTree, isViewMode]);
 
   const onEdgesChange = useCallback((changes) => {
     if (changes.every((change) => change.type === 'select')) return;
@@ -787,11 +857,16 @@ export default function App() {
     setEditingNodeId(null);
   }, []);
 
+  const controllerHidden = isControllerHidden;
+  const hasViewLayoutChanges = isViewMode && Object.keys(viewPositions).length > 0;
+
   const flowNodes = nodes.map((node) => ({
     ...node,
+    position: isViewMode && viewPositions[node.id] ? viewPositions[node.id] : node.position,
     selected: selectedNodeIds.includes(node.id),
     data: {
       ...node.data,
+      isInteractive: !isViewMode,
       isEditing: node.id === editingNodeId,
       onStartEditing: startEditingNode,
       onLabelChange: updateNodeLabel,
@@ -825,7 +900,7 @@ export default function App() {
     : null;
  
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isViewMode ? 'view-mode' : ''}`}>
       <div className="tree-title-banner">
         {isEditingTreeTitle ? (
           <input
@@ -911,6 +986,7 @@ export default function App() {
           setIsNodeEditorOpen(false);
         }}
         onNodeClick={(event, node) => {
+          if (isViewMode) return;
           setIsLassoMode(false);
           if (event.shiftKey) {
             setSelectedNodeIds((currentIds) => (
@@ -929,6 +1005,7 @@ export default function App() {
           setIsLineStyleMenuOpen(false);
         }}
         onEdgeClick={(event, edge) => {
+          if (isViewMode) return;
           setIsLassoMode(false);
           setSelectedNodeIds([]);
           if (event.shiftKey) {
@@ -957,8 +1034,10 @@ export default function App() {
           setIsLineStyleMenuOpen(false);
         }}
         selectionMode={SelectionMode.Partial}
-        selectionOnDrag={isLassoMode}
-        panOnDrag={!isLassoMode}
+        nodesConnectable={!isViewMode}
+        elementsSelectable={!isViewMode}
+        selectionOnDrag={isLassoMode && !isViewMode}
+        panOnDrag={isViewMode || !isLassoMode}
         proOptions={{ hideAttribution: true }}
         fitView={!initialLocalDraft?.viewport}
       >
@@ -977,6 +1056,11 @@ export default function App() {
         fileInputRef={fileInputRef}
         controllerMode={controllerMode}
         setControllerMode={setControllerMode}
+        onEnterViewMode={enterViewMode}
+        controllerHidden={controllerHidden}
+        onHideController={() => setIsControllerHidden(true)}
+        onSaveAsNewLayout={saveAsNewLayout}
+        canSaveLayout={hasViewLayoutChanges}
         editTarget={editTarget}
         setEditTarget={setEditTarget}
         isNodeEditorOpen={isNodeEditorOpen}
@@ -1005,6 +1089,19 @@ export default function App() {
         onUndo={undo}
         onRedo={redo}
       />
+
+      {controllerHidden && (
+        <button
+          type="button"
+          className="controller-reveal"
+          aria-label="Show controller"
+          title="Show controller"
+          onClick={() => setIsControllerHidden(false)}
+        >
+          <FontAwesomeIcon icon={faSliders} className="controller-reveal-icon" />
+          <FontAwesomeIcon icon={faChevronLeft} className="controller-reveal-arrow" />
+        </button>
+      )}
 
       {activeSaveFeedback && (
         <div className={`save-feedback-toast ${saveFeedback.status}`} role="status" aria-live="polite">

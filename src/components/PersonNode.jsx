@@ -45,7 +45,7 @@ export const PersonNode = memo(function PersonNode({ id, data }) {
         <button
           type="button"
           className="person-node-label"
-          onDoubleClick={() => data.onStartEditing(id)}
+          onDoubleClick={data.isInteractive === false ? undefined : () => data.onStartEditing(id)}
         >
           {data.label}
         </button>

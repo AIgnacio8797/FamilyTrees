@@ -1,5 +1,11 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEye, faPenToSquare, faUpload, faUser } from '@fortawesome/free-solid-svg-icons';
+import {
+  faChevronRight,
+  faEye,
+  faPenToSquare,
+  faUpload,
+  faUser,
+} from '@fortawesome/free-solid-svg-icons';
 import { getLineDasharray, lineStyleOptions } from '../constants/lineStyles';
 
 export function TreeController({
@@ -7,6 +13,11 @@ export function TreeController({
   fileInputRef,
   controllerMode,
   setControllerMode,
+  onEnterViewMode,
+  controllerHidden,
+  onHideController,
+  onSaveAsNewLayout,
+  canSaveLayout,
   editTarget,
   setEditTarget,
   isNodeEditorOpen,
@@ -41,9 +52,18 @@ export function TreeController({
   return (
     <aside
       ref={controllerRef}
-      className={`tree-controller ${isNodeEditorOpen ? 'expanded-node-editor' : ''}`}
+      className={`tree-controller ${isNodeEditorOpen ? 'expanded-node-editor' : ''} ${controllerHidden ? 'controller-hidden' : ''}`}
       aria-label="Tree controller"
     >
+      <button
+        type="button"
+        className="controller-hide-toggle"
+        aria-label="Hide controller"
+        title="Hide controller"
+        onClick={onHideController}
+      >
+        <FontAwesomeIcon icon={faChevronRight} />
+      </button>
       <input
         ref={fileInputRef}
         type="file"
@@ -64,11 +84,7 @@ export function TreeController({
           type="button"
           className={controllerMode === 'view' ? 'active-controller-tab' : 'muted-controller-tab'}
           aria-label="View"
-          onClick={() => {
-            setControllerMode('view');
-            setIsNodeEditorOpen(false);
-            setIsLineStyleMenuOpen(false);
-          }}
+          onClick={onEnterViewMode}
         >
           <FontAwesomeIcon icon={faEye} />
         </button>
@@ -281,7 +297,20 @@ export function TreeController({
               </div>
             </div>
           ) : (
-            'Coming soon'
+            <div className="controller-tool-stack view-mode-panel">
+              <button
+                type="button"
+                className="controller-action"
+                onClick={onSaveAsNewLayout}
+                disabled={!canSaveLayout}
+              >
+                Save as new layout
+              </button>
+              <div className="controller-panel-note">
+                Drag nodes to explore — rearranging here won't change the saved tree.
+                Save as new layout keeps your arrangement as a separate copy.
+              </div>
+            </div>
           )}
         </div>
       )}
