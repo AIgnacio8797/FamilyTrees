@@ -1,8 +1,12 @@
 // Server entry point
 import 'dotenv/config';
 import express from 'express';
+import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import pool from './db.js';
+import passport from './auth/passport.js';
 import treeRouter from './routes/tree.js';
+import authRouter from './routes/auth.js';
 
 
 const app = express();
@@ -13,7 +17,36 @@ const app = express();
 
 app.use(express.json({ limit: '1mb' }));
 
-const port = process.env.PORT || 3001; 
+const port = process.env.PORT || 3001;
+
+// Sessions stored in Postgres (the `session` table from migration 004).
+const PgSession = connectPgSimple(session);
+
+app.use(session({
+  store: new PgSession({ pool, tableName: 'session', createTableIfMissing: false }),
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: false, // dev is http://localhost; set true behind HTTPS in prod
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+  },
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+app.use('/auth', authRouter);
+
+// Current logged-in user (or null). Never exposes password_hash.
+app.get('/api/me', (req, res) => {
+  if (!req.user) return res.json({ user: null });
+
+  const { id, email, name, avatar_url } = req.user;
+  res.json({ user: { id, email, name, avatar_url } });
+});
 
 app.use('/api/trees', treeRouter);
 
