@@ -21,6 +21,7 @@ import {
 import { PersonNode } from './components/PersonNode';
 import { RelationshipEdge } from './components/RelationshipEdge';
 import { TreeController } from './components/TreeController';
+import { AuthControl } from './components/AuthControl';
 import { initialEdges, initialNodes, relativePositions } from './constants/familyTree';
 import { getLineDasharray } from './constants/lineStyles';
 import {
@@ -35,6 +36,7 @@ import {
 import './index.css';
 import '@xyflow/react/dist/style.css';
 import treeApi from './api/trees.js';
+import { getMe, logout, deleteAccount } from './api/auth.js';
 
 const nodeTypes = {
   person: PersonNode,
@@ -71,6 +73,8 @@ export default function App() {
     return 'idle'; // blank new editor
   });
   const [loadError, setLoadError] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isTreeOwner, setIsTreeOwner] = useState(true); // new/adopted trees: owner; fetched trees: set from server
   const [history, setHistory] = useState({ past: [], future: [] });
   const [controllerMode, setControllerMode] = useState('edit');
   const [isControllerHidden, setIsControllerHidden] = useState(false);
@@ -138,6 +142,17 @@ export default function App() {
     }
   }, [routeTreeId, draftTreeId, navigate]);
 
+  // Fetch the signed-in user once on mount (drives the sign-in button + ownership).
+  useEffect(() => {
+    let cancelled = false;
+    getMe().then((user) => {
+      if (!cancelled) setCurrentUser(user);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!isEditingTreeTitle) return;
 
@@ -183,6 +198,48 @@ export default function App() {
     setViewPositions({});
     clearInteractionState();
   }, [clearInteractionState]);
+
+  const handleSignOut = useCallback(async () => {
+    await logout();
+    window.location.reload();
+  }, []);
+
+  const handleDeleteAccount = useCallback(async () => {
+    await deleteAccount();
+    // Account + trees are gone; go to a clean blank editor, logged out.
+    window.location.href = '/';
+  }, []);
+
+  const createNewTree = useCallback(() => {
+    const blank = { nodes: initialNodes, edges: initialEdges };
+
+    treeRef.current = blank;
+    historyRef.current = { past: [], future: [] };
+    setHistory({ past: [], future: [] });
+    setTree(blank);
+    setTreeId(null);
+    setTreeTitle('Untitled Tree');
+    setTreeTitleDraft('Untitled Tree');
+    setIsTreeOwner(true);
+    setControllerMode('edit');
+    setEditTarget('people');
+    setViewPositions({});
+    clearInteractionState();
+
+    loadedTreeIdRef.current = null;
+    isDirtyRef.current = false;
+    viewportRef.current = null;
+
+    // Repoint the local draft to a fresh "new" slot so a reload won't bounce
+    // back to the last-opened tree.
+    saveTreeToLocalDraft(blank, null, { treeId: null, title: 'Untitled Tree' });
+
+    navigate('/');
+
+    requestAnimationFrame(() => {
+      reactFlowInstance?.fitView({ duration: 0, padding: 0.2 });
+    });
+  }, [clearInteractionState, navigate, reactFlowInstance]);
 
   const commitTree = useCallback((nextTree, { record = true } = {}) => {
     isDirtyRef.current = true;
@@ -489,6 +546,9 @@ export default function App() {
 
         loadedTreeIdRef.current = routeTreeId;
         isDirtyRef.current = false;
+        // Server decides ownership → owners edit, everyone else views (read-only).
+        setIsTreeOwner(Boolean(row.isOwner));
+        setControllerMode(row.isOwner ? 'edit' : 'view');
         setLoadStatus('loaded');
       } catch (error) {
         if (cancelled) return;
@@ -901,6 +961,11 @@ export default function App() {
  
   return (
     <div className={`app-shell ${isViewMode ? 'view-mode' : ''}`}>
+      <AuthControl
+        currentUser={currentUser}
+        onSignOut={handleSignOut}
+        onDeleteAccount={handleDeleteAccount}
+      />
       <div className="tree-title-banner">
         {isEditingTreeTitle ? (
           <input
@@ -1057,10 +1122,12 @@ export default function App() {
         controllerMode={controllerMode}
         setControllerMode={setControllerMode}
         onEnterViewMode={enterViewMode}
+        canEdit={isTreeOwner}
         controllerHidden={controllerHidden}
         onHideController={() => setIsControllerHidden(true)}
         onSaveAsNewLayout={saveAsNewLayout}
         canSaveLayout={hasViewLayoutChanges}
+        onCreateNewTree={createNewTree}
         editTarget={editTarget}
         setEditTarget={setEditTarget}
         isNodeEditorOpen={isNodeEditorOpen}

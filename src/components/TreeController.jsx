@@ -14,10 +14,12 @@ export function TreeController({
   controllerMode,
   setControllerMode,
   onEnterViewMode,
+  canEdit,
   controllerHidden,
   onHideController,
   onSaveAsNewLayout,
   canSaveLayout,
+  onCreateNewTree,
   editTarget,
   setEditTarget,
   isNodeEditorOpen,
@@ -76,6 +78,7 @@ export function TreeController({
           type="button"
           className={controllerMode === 'edit' ? 'active-controller-tab' : 'muted-controller-tab'}
           aria-label="Edit"
+          disabled={!canEdit}
           onClick={() => setControllerMode('edit')}
         >
           <FontAwesomeIcon icon={faPenToSquare} />
@@ -92,6 +95,7 @@ export function TreeController({
           type="button"
           className={controllerMode === 'import-export' ? 'active-controller-tab' : 'muted-controller-tab'}
           aria-label="Import or export"
+          disabled={!canEdit}
           onClick={() => {
             setControllerMode('import-export');
             setIsNodeEditorOpen(false);
@@ -273,6 +277,13 @@ export function TreeController({
               <button
                 type="button"
                 className="controller-action"
+                onClick={onCreateNewTree}
+              >
+                New tree
+              </button>
+              <button
+                type="button"
+                className="controller-action"
                 onClick={onSaveTree}
               >
                 Save tree
@@ -298,6 +309,13 @@ export function TreeController({
             </div>
           ) : (
             <div className="controller-tool-stack view-mode-panel">
+              <button
+                type="button"
+                className="controller-action"
+                onClick={onCreateNewTree}
+              >
+                New tree
+              </button>
               <button
                 type="button"
                 className="controller-action"

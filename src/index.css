@@ -442,7 +442,7 @@ body {
 }
 
 .import-export-panel {
-  grid-template-rows: 40px 40px 40px auto;
+  grid-template-rows: 40px 40px 40px 40px auto;
   align-content: start;
   padding-top: 8px;
 }
@@ -565,8 +565,12 @@ body {
 }
 
 /* Nodes: 4-direction move cursor in every mode. */
-.react-flow__node-person {
-  cursor: move;
+/* Whole node footprint (incl. the green border/edge) is the 4-direction move
+   cursor, hovering or dragging. !important to beat React Flow's own
+   .react-flow__node.draggable{cursor:grab} / .dragging{cursor:grabbing}. */
+.react-flow__node-person,
+.react-flow__node-person.dragging {
+  cursor: move !important;
 }
 
 .person-node-input {
@@ -750,6 +754,132 @@ body {
 
 .view-mode-note {
   align-self: center;
+}
+
+/* Top-right auth widget */
+.auth-control {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-signin {
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--tree-sun);
+  color: var(--tree-text);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgb(34 36 38 / 16%);
+  transition: background-color 140ms ease;
+}
+
+.auth-signin:hover {
+  background: var(--tree-sun-hover);
+}
+
+.auth-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 252 240 / 94%);
+  box-shadow: 0 6px 16px rgb(34 36 38 / 14%);
+  cursor: pointer;
+  font: inherit;
+}
+
+.auth-chevron {
+  font-size: 11px;
+  color: #6d7067;
+}
+
+.auth-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 31;
+  display: grid;
+  min-width: 190px;
+  padding: 6px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgb(34 36 38 / 22%);
+}
+
+.auth-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #20231f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.auth-menu-item:hover {
+  background: rgb(0 0 0 / 6%);
+}
+
+.auth-menu-item.danger {
+  color: #b3402a;
+}
+
+.auth-menu-item.danger:hover {
+  background: rgb(179 64 42 / 10%);
+}
+
+.auth-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.auth-name {
+  max-width: 160px;
+  overflow: hidden;
+  color: #20231f;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-signout {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #6d7067;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.auth-signout:hover {
+  background: rgb(0 0 0 / 7%);
+  color: #20231f;
+}
+
+.controller-tabs button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .tree-load-overlay {

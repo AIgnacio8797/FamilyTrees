@@ -5,6 +5,7 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import pool from './db.js';
 import passport from './auth/passport.js';
+import { requireAuth } from './middleware/requireAuth.js';
 import treeRouter from './routes/tree.js';
 import authRouter from './routes/auth.js';
 
@@ -46,6 +47,29 @@ app.get('/api/me', (req, res) => {
 
   const { id, email, name, avatar_url } = req.user;
   res.json({ user: { id, email, name, avatar_url } });
+});
+
+// Delete the current account and ALL its data (GDPR / Google data-deletion).
+// Removing the users row cascades to that user's trees (trees.user_id FK is
+// ON DELETE CASCADE). Then we tear down the session.
+app.delete('/api/me', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+
+  req.logout((logoutErr) => {
+    if (logoutErr) console.error('Logout after account delete failed:', logoutErr);
+
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid');
+      res.json({ ok: true });
+    });
+  });
 });
 
 app.use('/api/trees', treeRouter);
